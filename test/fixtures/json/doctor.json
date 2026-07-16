@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "node": {
+    "ok": true,
+    "message": "<node>"
+  },
+  "workspace": {
+    "ok": true,
+    "message": "<cwd>"
+  },
+  "command": {
+    "ok": true,
+    "message": "<command>"
+  },
+  "launcher": {
+    "ok": false,
+    "message": "CodePark.command not found; run codepark launcher-install or codepark install-local"
+  },
+  "configDir": {
+    "ok": true,
+    "message": "config directory permissions 0700"
+  },
+  "configFile": {
+    "ok": true,
+    "message": "config file permissions 0600"
+  },
+  "provider": {
+    "ok": true,
+    "message": "codex"
+  },
+  "model": {
+    "ok": true,
+    "message": "codex-cli-default"
+  },
+  "apiKey": {
+    "ok": true,
+    "message": "codex provider does not require an API key"
+  },
+  "baseUrl": {
+    "ok": true,
+    "message": "codex://cli"
+  },
+  "hooks": {
+    "ok": true,
+    "message": "no hooks configured"
+  },
+  "skills": {
+    "ok": true,
+    "message": "no local skills"
+  },
+  "tasks": {
+    "ok": true,
+    "message": "no task ledger"
+  },
+  "workers": {
+    "ok": true,
+    "message": "no workers"
+  },
+  "mcp": {
+    "ok": true,
+    "message": "no MCP config"
+  }
+}

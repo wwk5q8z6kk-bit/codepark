@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "error": {
+    "code": "EARGS",
+    "message": "tasks status must be open, done, or blocked"
+  }
+}
+

@@ -1,0 +1,13 @@
+node_modules/
+.worktrees/
+CodePark.command
+.codepark/checkpoints/
+.codepark/profile.json
+.codepark/tasks.json
+.codepark/workers.json
+.codepark/dashboard.html
+.codepark/workers/
+.env
+.DS_Store
+*.log
+*.tgz

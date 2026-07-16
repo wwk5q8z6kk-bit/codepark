@@ -1,0 +1,11 @@
+{
+  "url": "<url>",
+  "status": 200,
+  "headers": {
+    "content-length": "7",
+    "content-type": "text/plain",
+    "date": "Mon, 01 Jan 2000 00:00:00 GMT"
+  },
+  "bodyText": "fixture",
+  "truncated": false
+}

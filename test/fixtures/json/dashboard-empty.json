@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "cwd": "<cwd>",
+  "tasks": [],
+  "totals": {
+    "tasks": 0,
+    "agents": 0,
+    "runningAgents": 0,
+    "shellWorkers": 0
+  }
+}
+

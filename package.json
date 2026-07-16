@@ -1,0 +1,18 @@
+{
+  "name": "codepark",
+  "version": "0.1.1",
+  "description": "Experimental terminal coding assistant CLI with guarded file, shell, and MCP tools.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wwk5q8z6kk-bit/codepark.git"
+  },
+  "homepage": "https://github.com/wwk5q8z6kk-bit/codepark#readme",
+  "bugs": {
+    "url": "https://github.com/wwk5q8z6kk-bit/codepark/issues"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "MIT"
+}

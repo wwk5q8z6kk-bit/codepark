@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "<id>",
+  "title": "Write fixture tests",
+  "status": "done",
+  "priority": "low",
+  "dependsOn": [],
+  "labels": [
+    "ops"
+  ],
+  "notes": "Updated notes.",
+  "createdAt": "<timestamp>",
+  "updatedAt": "<timestamp>",
+  "completedAt": "<timestamp>",
+  "blockedBy": []
+}
+

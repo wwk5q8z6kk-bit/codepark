@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "verify": [
+      "npm run verify"
+    ],
+    "smoke": [
+      "npm run smoke"
+    ],
+    "smoke:all": [
+      "npm run smoke:all"
+    ]
+  }
+}

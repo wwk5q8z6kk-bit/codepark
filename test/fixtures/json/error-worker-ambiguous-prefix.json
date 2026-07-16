@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "error": {
+    "code": "EARGS",
+    "message": "worker id prefix is ambiguous: worker-"
+  }
+}
+

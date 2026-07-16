@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "error": {
+    "code": "EFLAGS",
+    "message": "unknown flag: --wat"
+  }
+}
+
