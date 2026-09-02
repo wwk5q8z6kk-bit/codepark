@@ -526,6 +526,57 @@ test('mcp_list_tools lists tools from configured MCP servers', async () => {
   assert.match(result, /echo/);
 });
 
+test('MCP tools require approval for untrusted workspace configuration and calls', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-tools-'));
+  await fs.writeFile(path.join(root, '.codepark.mcp.json'), JSON.stringify({
+    servers: {
+      mock: {
+        command: process.execPath,
+        args: [mockMcpServer],
+        env: { MCP_MODE: 'test', API_TOKEN: 'topsecret' }
+      }
+    }
+  }));
+
+  const unapproved = createTools({ cwd: root, assumeYes: false });
+  await assert.rejects(
+    () => unapproved.execute('mcp_list_tools', {}),
+    /confirmation required: Launch untrusted workspace MCP server/
+  );
+  await assert.rejects(
+    () => unapproved.execute('mcp_call_tool', { server: 'mock', tool: 'echo' }),
+    /confirmation required: Launch untrusted workspace MCP server/
+  );
+
+  const prompts = [];
+  const approved = createTools({
+    cwd: root,
+    assumeYes: false,
+    rl: {
+      question: async prompt => {
+        prompts.push(prompt);
+        return 'yes';
+      }
+    }
+  });
+  await approved.execute('mcp_list_tools', {});
+  const result = await approved.execute('mcp_call_tool', {
+    server: 'mock',
+    tool: 'echo',
+    arguments: { text: 'approved' }
+  });
+
+  assert.match(prompts[0], /Launch untrusted workspace MCP server/);
+  assert.match(prompts[0], /\.codepark\.mcp\.json/);
+  assert.match(prompts[0], /"MCP_MODE"="test"/);
+  assert.match(prompts[0], /"API_TOKEN"="\[redacted\]"/);
+  assert.doesNotMatch(prompts[0], /topsecret/);
+  assert.match(prompts[1], /Launch untrusted workspace MCP server/);
+  assert.match(prompts[2], /Call MCP tool "mock\.echo"/);
+  assert.match(prompts[2], /"text":"approved"/);
+  assert.match(result, /echo:approved/);
+});
+
 test('mcp_call_tool calls a configured MCP server tool', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-tools-'));
   await fs.writeFile(path.join(root, '.codepark.mcp.json'), JSON.stringify({

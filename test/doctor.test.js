@@ -281,7 +281,7 @@ test('runDoctor can probe MCP server health', async () => {
 
   const report = await runDoctor(
     { provider: 'codex', baseUrl: 'codex://cli', model: 'codex-cli-default' },
-    { cwd, mcpHealth: true }
+    { cwd, mcpHealth: true, approveMcp: async () => {} }
   );
 
   assert.equal(report.mcp.ok, true);
@@ -299,7 +299,7 @@ test('runDoctor reports MCP health failures', async () => {
 
   const report = await runDoctor(
     { provider: 'codex', baseUrl: 'codex://cli', model: 'codex-cli-default' },
-    { cwd, mcpHealth: true }
+    { cwd, mcpHealth: true, approveMcp: async () => {} }
   );
 
   assert.equal(report.mcp.ok, false);
