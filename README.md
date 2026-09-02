@@ -140,6 +140,23 @@ codepark --secure --provider codex
 CODEPARK_SECURE_MODE=1 codepark --provider codex
 ```
 
+## MCP Security
+
+Workspace `.codepark.mcp.json` files are untrusted because repositories can
+change them. CodePark shows the configured command and asks for approval before
+launching a workspace MCP server; it also confirms every MCP tool call. For
+non-interactive `doctor --mcp-health`, use `--yes` to explicitly approve a
+workspace configuration.
+
+Put user-trusted servers in `~/.codepark/mcp.json` (or the configured
+`CODEPARK_CONFIG_DIR`) using the same `{ "servers": { ... } }` format. User
+servers override workspace servers with the same name, but MCP tool calls still
+require approval. Spawned MCP servers receive only platform runtime variables
+such as `PATH`, `HOME`, and temporary-directory variables, plus environment
+variables explicitly set in their server configuration.
+Non-secret configured environment values are shown in the approval prompt;
+credential-like values are redacted.
+
 ## Commands
 
 ```text
@@ -381,7 +398,7 @@ Inside interactive mode:
 - Obvious destructive shell commands are blocked.
 - Persistent shell sessions preserve cwd and environment across approved commands, with `/shell-read` and `/shell-stop` for output and cleanup. CodePark also stops live sessions on CLI exit.
 - Git commands are read-only.
-- MCP support reads `.codepark.mcp.json`, launches configured stdio servers, lists tools with `/mcp`, calls tools with `/mcp-call`, and exposes MCP calls to model tool use.
+- MCP support reads user-trusted `~/.codepark/mcp.json` and untrusted workspace `.codepark.mcp.json` files, launches configured stdio servers, lists tools with `/mcp`, calls tools with `/mcp-call`, and exposes MCP calls to model tool use. Workspace servers require approval before launch, and every MCP tool call requires approval.
 - Sessions auto-save to `~/.codepark/sessions`; use `codepark resume` or `/resume` to continue work.
 - `/tokens` shows estimated context usage, and `/compact` summarizes older history while preserving recent messages.
 - CodePark auto-compacts saved history when it crosses the configured threshold and the summary would reduce context size.

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getConfigDir, getConfigPath, modelAuthStatus } from './config.js';
 import { listHooks } from './hooks.js';
-import { loadWorkspaceMcpConfig } from './mcp/config.js';
+import { loadMcpConfig } from './mcp/config.js';
 import { listWorkspaceMcpTools } from './mcp/runtime.js';
 import { inspectLauncher } from './launcher.js';
 import { listLocalSkills } from './skills.js';
@@ -38,7 +38,12 @@ export async function runDoctor(config, options = {}) {
     skills: await checkSkills(cwd),
     tasks: await checkTasks(cwd),
     workers: await checkWorkers(cwd),
-    mcp: await checkMcp(cwd, { mcpHealth: Boolean(options.mcpHealth) })
+    mcp: await checkMcp(cwd, {
+      mcpHealth: Boolean(options.mcpHealth),
+      approve: options.approveMcp,
+      configDir: options.configDir,
+      userConfigFile: options.userConfigFile
+    })
   };
 }
 
@@ -166,8 +171,8 @@ async function checkWorkers(cwd) {
 
 async function checkMcp(cwd, options = {}) {
   try {
-    if (options.mcpHealth) return await checkMcpHealth(cwd);
-    const loaded = await loadWorkspaceMcpConfig(cwd);
+    if (options.mcpHealth) return await checkMcpHealth(cwd, options);
+    const loaded = await loadMcpConfig(cwd, options);
     if (!loaded.exists) return { ok: true, message: 'no MCP config' };
     const count = Object.keys(loaded.config.servers).length;
     return { ok: true, message: `${count} MCP server${count === 1 ? '' : 's'} configured` };
@@ -176,8 +181,8 @@ async function checkMcp(cwd, options = {}) {
   }
 }
 
-async function checkMcpHealth(cwd) {
-  const report = await listWorkspaceMcpTools(cwd);
+async function checkMcpHealth(cwd, options = {}) {
+  const report = await listWorkspaceMcpTools(cwd, options);
   if (!report.exists) return { ok: true, message: 'no MCP config' };
   if (!report.entries.length) return { ok: true, message: 'MCP health ok: 0 servers configured' };
 
