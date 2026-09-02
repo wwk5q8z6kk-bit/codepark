@@ -3,6 +3,20 @@ import { spawn } from 'node:child_process';
 
 const protocolVersion = '2024-11-05';
 const defaultTimeoutMs = 10000;
+const posixEnvNames = ['PATH', 'HOME', 'TMPDIR'];
+const windowsEnvNames = [
+  'PATH',
+  'HOME',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'SystemRoot',
+  'WINDIR',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP'
+];
 
 export class McpClient {
   constructor({ name, server, cwd, timeoutMs = defaultTimeoutMs }) {
@@ -21,7 +35,7 @@ export class McpClient {
     if (this.child) return;
     this.child = spawn(this.server.command, this.server.args, {
       cwd: resolveServerCwd(this.cwd, this.server.cwd),
-      env: { ...process.env, ...this.server.env },
+      env: createMcpSubprocessEnv(process.env, this.server.env),
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -138,6 +152,19 @@ export async function withMcpClient(options, callback) {
   }
 }
 
+export function createMcpSubprocessEnv(baseEnv = process.env, serverEnv = {}) {
+  const env = {};
+  const names = process.platform === 'win32' ? windowsEnvNames : posixEnvNames;
+  for (const name of names) {
+    const entry = findEnvironmentEntry(baseEnv, name);
+    if (entry && entry[1] != null) env[entry[0]] = String(entry[1]);
+  }
+  for (const [key, value] of Object.entries(serverEnv || {})) {
+    if (value != null) env[key] = String(value);
+  }
+  return env;
+}
+
 function normalizeServerConfig(server) {
   if (!server || typeof server !== 'object') throw new Error('MCP server config must be an object');
   if (!server.command || typeof server.command !== 'string') throw new Error('MCP server command is required');
@@ -152,6 +179,11 @@ function normalizeServerConfig(server) {
 function normalizeEnv(env) {
   if (!env || typeof env !== 'object') return {};
   return Object.fromEntries(Object.entries(env).map(([key, value]) => [key, String(value)]));
+}
+
+function findEnvironmentEntry(env, name) {
+  const expected = name.toUpperCase();
+  return Object.entries(env || {}).find(([key]) => key.toUpperCase() === expected);
 }
 
 function resolveServerCwd(workspaceCwd, serverCwd) {

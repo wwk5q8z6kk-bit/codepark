@@ -44,9 +44,15 @@ function handleMessage(message) {
   }
 
   if (message.method === 'tools/call') {
+    const isEnvironmentTool = message.params?.name === 'environment';
     respond(message.id, {
       content: [
-        { type: 'text', text: `echo:${message.params?.arguments?.text ?? ''}` }
+        {
+          type: 'text',
+          text: isEnvironmentTool
+            ? `secret:${process.env.CODEPARK_API_KEY ?? ''};explicit:${process.env.MCP_EXPLICIT ?? ''}`
+            : `echo:${message.params?.arguments?.text ?? ''}`
+        }
       ]
     });
     return;
