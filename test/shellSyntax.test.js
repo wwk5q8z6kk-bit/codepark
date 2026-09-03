@@ -14,10 +14,9 @@ test('parseShellWords keeps quoted arguments and shell operators distinct', () =
 });
 
 test('quoteShellWords preserves embedded single quotes for shell execution', () => {
-  assert.equal(
-    quoteShellWords(['node', '-e', "console.log('done')"]),
-    "node -e 'console.log('\"'\"'done'\"'\"')'"
-  );
+  assert.equal(quoteShellWords(['node', '-e', "console.log('done')"]), process.platform === 'win32'
+    ? `node -e "console.log('done')"`
+    : `node -e 'console.log('"'"'done'"'"')'`);
 });
 
 test('quoteShellWords preserves literal percent signs for Windows shell execution', () => {

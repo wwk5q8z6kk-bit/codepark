@@ -10,7 +10,7 @@ export function startShellSession(cwd, options = {}) {
   const id = normalizeSessionId(options.id) || `shell-${nextId++}`;
   if (sessions.has(id)) throw new Error(`shell session already exists: ${id}`);
   const shell = options.shell || defaultShell();
-  const child = spawn(shell, [], {
+  const child = spawn(shell, isWindows() ? ['/D', '/Q', '/K'] : [], {
     cwd,
     env: createSubprocessEnv(process.env),
     detached: process.platform !== 'win32',

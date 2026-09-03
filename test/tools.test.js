@@ -193,7 +193,7 @@ test('apply_patch applies a unified patch with approval bypassed', async () => {
   const result = await tools.execute('apply_patch', { patch });
 
   assert.match(result, /Applied patch/);
-  assert.equal(await fs.readFile(path.join(root, 'a.txt'), 'utf8'), 'new\n');
+  assert.equal(normalizeLineEndings(await fs.readFile(path.join(root, 'a.txt'), 'utf8')), 'new\n');
 });
 
 test('apply_patch obeys workspace write policy', async () => {
@@ -587,7 +587,7 @@ test('checkpoint tools create, list, and restore workflow snapshots', async () =
   const restored = await tools.execute('restore_checkpoint', { id: checkpointId });
   assert.match(restored, /Checkpoint restored:/);
   assert.match(restored, /tool checkpoint/);
-  assert.equal(await fs.readFile(path.join(workspace, 'tracked.txt'), 'utf8'), 'changed\n');
+  assert.equal(normalizeLineEndings(await fs.readFile(path.join(workspace, 'tracked.txt'), 'utf8')), 'changed\n');
 });
 
 test('persistent shell tools preserve session state', async () => {
@@ -597,8 +597,14 @@ test('persistent shell tools preserve session state', async () => {
   const started = await tools.execute('start_shell_session', { id: 'dev' });
   assert.match(started, /Shell session started: dev/);
 
-  await tools.execute('send_shell_session', { id: 'dev', command: 'FOO=codepark' });
-  const echoed = await tools.execute('send_shell_session', { id: 'dev', command: 'echo $FOO' });
+  await tools.execute('send_shell_session', {
+    id: 'dev',
+    command: process.platform === 'win32' ? 'set "FOO=codepark"' : 'FOO=codepark'
+  });
+  const echoed = await tools.execute('send_shell_session', {
+    id: 'dev',
+    command: process.platform === 'win32' ? 'echo %FOO%' : 'echo $FOO'
+  });
   assert.match(echoed, /codepark/);
 
   const stopped = await tools.execute('stop_shell_session', { id: 'dev' });
@@ -1023,11 +1029,12 @@ test('init_harness tool writes inferred project hooks', async () => {
 test('install_launcher tool writes a clickable launcher', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-tools-launcher-'));
   const tools = createTools({ cwd: workspace, assumeYes: true });
+  const launcherName = process.platform === 'win32' ? 'OpenCodePark.cmd' : 'OpenCodePark.command';
 
-  const result = await tools.execute('install_launcher', { target: 'OpenCodePark.command' });
-  assert.match(result, /Wrote OpenCodePark\.command/);
+  const result = await tools.execute('install_launcher', { target: launcherName });
+  assert.match(result, new RegExp(`Wrote ${escapeRegExp(launcherName)}`));
 
-  const text = await fs.readFile(path.join(workspace, 'OpenCodePark.command'), 'utf8');
+  const text = await fs.readFile(path.join(workspace, launcherName), 'utf8');
   assert.match(text, process.platform === 'win32' ? /where codepark/ : /command -v codepark/);
   assert.match(text, /--secure/);
   assert.match(text, /workspace-boot/);
@@ -1227,6 +1234,14 @@ async function runGit(cwd, args) {
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
   await promisify(execFile)('git', args, { cwd });
+}
+
+function normalizeLineEndings(value) {
+  return String(value).replaceAll('\r\n', '\n');
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function writeWorkerRecords(workspace, records) {

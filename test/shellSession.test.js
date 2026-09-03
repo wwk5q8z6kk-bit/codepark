@@ -13,7 +13,7 @@ test('shell sessions preserve environment across commands', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-shell-'));
   const session = startShellSession(root, { id: 'env-test' });
   try {
-    await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'set FOO=codepark' : 'FOO=codepark');
+    await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'set "FOO=codepark"' : 'FOO=codepark');
     const result = await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'echo %FOO%' : 'echo $FOO');
     assert.equal(result.exitCode, 0);
     assert.match(result.output, /codepark/);

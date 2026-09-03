@@ -50,7 +50,7 @@ test('installLauncher supports forced relative targets only', async () => {
   assert.match(await fs.readFile(path.join(root, target), 'utf8'), /workspace-boot/);
 
   await assert.rejects(
-    () => installLauncher(root, { target: '../outside.command' }),
+    () => installLauncher(root, { target: process.platform === 'win32' ? '../outside.cmd' : '../outside.command' }),
     /must stay inside/
   );
 });

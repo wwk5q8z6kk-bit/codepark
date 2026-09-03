@@ -2100,7 +2100,7 @@ test('interactive mode applies a patch file', async () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Applied patch/);
-  assert.equal(await fs.readFile(path.join(workspace, 'a.txt'), 'utf8'), 'new\n');
+  assert.equal(normalizeLineEndings(await fs.readFile(path.join(workspace, 'a.txt'), 'utf8')), 'new\n');
 });
 
 test('interactive mode can read notebooks', async () => {
@@ -2337,7 +2337,7 @@ test('interactive mode restores checkpoints', async () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Checkpoint restored:/);
   assert.match(result.stdout, /cli restore/);
-  assert.equal(await fs.readFile(path.join(workspace, 'tracked.txt'), 'utf8'), 'changed\n');
+  assert.equal(normalizeLineEndings(await fs.readFile(path.join(workspace, 'tracked.txt'), 'utf8')), 'changed\n');
 });
 
 test('interactive mode keeps persistent shell session state', async () => {
@@ -2351,7 +2351,9 @@ test('interactive mode keeps persistent shell session state', async () => {
     {
       cwd: root,
       encoding: 'utf8',
-      input: '/shell-start dev\n/shell-send dev FOO=codepark\n/shell-send dev echo $FOO\n/shell-stop dev\n/exit\n',
+      input: process.platform === 'win32'
+        ? '/shell-start dev\n/shell-send dev set "FOO=codepark"\n/shell-send dev echo %FOO%\n/shell-stop dev\n/exit\n'
+        : '/shell-start dev\n/shell-send dev FOO=codepark\n/shell-send dev echo $FOO\n/shell-stop dev\n/exit\n',
       env: {
         ...process.env,
         CODEPARK_CONFIG_DIR: configDir,
@@ -2796,6 +2798,10 @@ async function writeWorkerRecords(workspace, records) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeLineEndings(value) {
+  return String(value).replaceAll('\r\n', '\n');
 }
 
 async function waitForWorker(cwd, predicate) {

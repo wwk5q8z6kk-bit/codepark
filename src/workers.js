@@ -83,7 +83,6 @@ export async function startWorker(cwd, options = {}) {
   child.unref();
 
   const runningWorker = { ...worker, status: 'running', pid: child.pid, updatedAt: new Date().toISOString() };
-  await waitForRunnerStart(absoluteStatusPath, child.pid);
   ledger.workers.push(runningWorker);
   await writeWorkerLedger(cwd, ledger);
   return publicWorker(runningWorker);
@@ -449,7 +448,13 @@ function resolveWorkerFromList(workers, id) {
 
 async function hydrateWorker(cwd, worker) {
   const status = await readJsonFile(path.join(cwd, worker.statusPath)).catch(() => ({}));
-  const merged = normalizeWorker({ ...worker, ...status });
+  const merged = normalizeWorker({
+    ...worker,
+    ...status,
+    ...(worker.status === 'running' && status.status === 'starting'
+      ? { status: 'running', pid: worker.pid }
+      : {})
+  });
   if ((merged.status === 'running' || merged.status === 'starting') && merged.pid && !isProcessAlive(merged.pid)) {
     if (isRecentlyUpdated(merged.updatedAt, staleWorkerGraceMs)) return publicWorker(merged);
     const now = new Date().toISOString();
@@ -510,15 +515,6 @@ async function appendWorkerLog(cwd, worker, value) {
 
 async function readJsonFile(file) {
   return JSON.parse(await fs.readFile(file, 'utf8'));
-}
-
-async function waitForRunnerStart(statusPath, pid) {
-  const deadline = Date.now() + 1000;
-  while (Date.now() < deadline) {
-    const status = await readJsonFile(statusPath).catch(() => null);
-    if (status?.pid === pid || status?.finishedAt) return;
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
 }
 
 function normalizeWorker(worker) {
