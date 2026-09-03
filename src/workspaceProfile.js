@@ -5,7 +5,7 @@ import { detectContainerRuntime } from './containerRuntime.js';
 import { inferWorkspaceHooks } from './harness.js';
 import { defaultPolicy, getPolicyPreset } from './policyPresets.js';
 
-const profilePath = path.join('.codepark', 'profile.json');
+const profilePath = '.codepark/profile.json';
 
 export async function readWorkspaceProfile(cwd) {
   const file = path.join(cwd, profilePath);

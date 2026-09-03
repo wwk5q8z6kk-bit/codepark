@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { createSubprocessEnv } from './env.js';
 import { formatCodexProgressMessage, readCodexProgressIntervalMs } from './codexProgress.js';
 import { isCodexBaseUrl } from './config.js';
+import { parseShellWords } from './shellSyntax.js';
 
 const codexDefaultModel = 'codex-cli-default';
 
@@ -18,6 +19,7 @@ export async function askCodexCli({
   cwd,
   onToken,
   onStatus,
+  codexCommand = process.env.CODEPARK_CODEX_COMMAND || 'codex',
   progressIntervalMs = readCodexProgressIntervalMs()
 }) {
   const outputFile = path.join(os.tmpdir(), `codepark-codex-${process.pid}-${Date.now()}.txt`);
@@ -41,7 +43,12 @@ export async function askCodexCli({
 
   args.push(formatMessagesForCodex(messages));
 
-  const result = await runCodex(args, cwd, { onStatus, progressIntervalMs, secureMode: config.secureMode });
+  const result = await runCodex(args, cwd, {
+    onStatus,
+    progressIntervalMs,
+    secureMode: config.secureMode,
+    codexCommand
+  });
   const finalMessage = await fs.readFile(outputFile, 'utf8').catch(() => '');
   await fs.rm(outputFile, { force: true }).catch(() => {});
 
@@ -70,10 +77,20 @@ export function formatMessagesForCodex(messages) {
   ].join('\n');
 }
 
-function runCodex(args, cwd, { onStatus, progressIntervalMs } = {}) {
+function runCodex(args, cwd, { onStatus, progressIntervalMs, codexCommand = 'codex' } = {}) {
   return new Promise(resolve => {
     const startedAt = Date.now();
-    const child = spawn('codex', args, {
+    const command = Array.isArray(codexCommand) ? codexCommand : parseShellWords(codexCommand);
+    if (command.some(part => typeof part !== 'string')) {
+      resolve({ code: 127, stdout: '', stderr: 'codex command may not contain shell operators' });
+      return;
+    }
+    const [executable, ...commandArgs] = command.map(value => String(value ?? '').trim()).filter(Boolean);
+    if (!executable) {
+      resolve({ code: 127, stdout: '', stderr: 'codex command is required' });
+      return;
+    }
+    const child = spawn(executable, [...commandArgs, ...args], {
       cwd,
       env: createSubprocessEnv(process.env),
       stdio: ['ignore', 'pipe', 'pipe']

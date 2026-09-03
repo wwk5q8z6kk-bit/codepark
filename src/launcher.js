@@ -1,23 +1,28 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isWindows } from './platform.js';
 
-const defaultLauncherName = 'CodePark.command';
 const codeparkBinPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'codepark.js');
 
 export async function inspectLauncher(cwd, options = {}) {
-  const target = resolveLauncherTarget(cwd, options.target || defaultLauncherName);
+  const launcherName = options.target || defaultLauncherName();
+  const target = resolveLauncherTarget(cwd, launcherName);
   try {
     const [stat, text] = await Promise.all([
       fs.stat(target),
       fs.readFile(target, 'utf8')
     ]);
     const checks = {
-      executable: Boolean((stat.mode & 0o111)),
+      executable: isWindows() ? /\.cmd$/i.test(target) : Boolean((stat.mode & 0o111)),
       secure: text.includes('--secure'),
       boot: text.includes('workspace-boot'),
-      fallback: text.includes('command -v codepark') && text.includes('bin/codepark.js'),
-      pause: text.includes('Press Return to close this CodePark window.') || text.includes('Press Enter to close this CodePark window.')
+      fallback: isWindows()
+        ? text.includes('where codepark') && text.includes('bin\\codepark.js')
+        : text.includes('command -v codepark') && text.includes('bin/codepark.js'),
+      pause: isWindows()
+        ? text.includes('Press any key to close this CodePark window.')
+        : text.includes('Press Return to close this CodePark window.') || text.includes('Press Enter to close this CodePark window.')
     };
     const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
     return {
@@ -26,7 +31,7 @@ export async function inspectLauncher(cwd, options = {}) {
       path: path.relative(cwd, target),
       absolutePath: target,
       checks,
-      message: failed.length ? `CodePark.command needs update: ${failed.join(', ')}` : 'CodePark.command secure workspace-boot launcher ready'
+      message: failed.length ? `${launcherName} needs update: ${failed.join(', ')}` : `${launcherName} secure workspace-boot launcher ready`
     };
   } catch (error) {
     if (error?.code === 'ENOENT') {
@@ -42,7 +47,7 @@ export async function inspectLauncher(cwd, options = {}) {
           fallback: false,
           pause: false
         },
-        message: 'CodePark.command not found; run codepark launcher-install or codepark install-local'
+        message: `${launcherName} not found; run codepark launcher-install or codepark install-local`
       };
     }
     return {
@@ -57,18 +62,38 @@ export async function inspectLauncher(cwd, options = {}) {
         fallback: false,
         pause: false
       },
-      message: `CodePark.command unreadable: ${error.message}`
+      message: `${launcherName} unreadable: ${error.message}`
     };
   }
 }
 
 export async function installLauncher(cwd, options = {}) {
-  const target = resolveLauncherTarget(cwd, options.target || defaultLauncherName);
+  const target = resolveLauncherTarget(cwd, options.target || defaultLauncherName());
   const command = buildCodeParkShellCommand(cwd, ['--secure', '--cwd', cwd, 'workspace-boot'], { exec: false });
   const pausePrompt = process.platform === 'darwin'
     ? 'Press Return to close this CodePark window.'
-    : 'Press Enter to close this CodePark window.';
-  const content = [
+    : (isWindows() ? 'Press any key to close this CodePark window.' : 'Press Enter to close this CodePark window.');
+  const content = isWindows() ? [
+    '@echo off',
+    'setlocal',
+    'echo CodePark workspace boot',
+    `echo Workspace: ${windowsQuote(cwd)}`,
+    'echo.',
+    command,
+    'set "status=%ERRORLEVEL%"',
+    'echo.',
+    'if "%status%"=="0" (',
+    '  echo CodePark workspace boot finished.',
+    ') else (',
+    '  echo CodePark workspace boot failed with exit code %status%.',
+    ')',
+    'echo Next commands: codepark workers ^| codepark dashboard-open ^| codepark doctor',
+    'echo.',
+    `echo ${pausePrompt}`,
+    'pause >nul',
+    'exit /b %status%',
+    ''
+  ].join('\r\n') : [
     '#!/bin/sh',
     'set -u',
     "echo 'CodePark workspace boot'",
@@ -119,11 +144,14 @@ export function formatLauncherInstall(result) {
     '',
     process.platform === 'darwin'
       ? `Next: double-click ${result.path} in Finder to boot the CodePark harness for this workspace.`
-      : `Next: run ./${result.path} to boot the CodePark harness for this workspace.`
+      : (isWindows()
+        ? `Next: run .\\${result.path} to boot the CodePark harness for this workspace.`
+        : `Next: run ./${result.path} to boot the CodePark harness for this workspace.`)
   ].join('\n');
 }
 
 export function buildCodeParkShellCommand(cwd, args = [], options = {}) {
+  if (isWindows()) return buildWindowsCommand(cwd, args);
   const normalizedArgs = args.map(value => String(value));
   const globalCommand = ['codepark', ...normalizedArgs].map(shellQuote).join(' ');
   const localCommand = [process.execPath, codeparkBinPath, ...normalizedArgs].map(shellQuote).join(' ');
@@ -131,9 +159,34 @@ export function buildCodeParkShellCommand(cwd, args = [], options = {}) {
   return `cd ${shellQuote(cwd)} && if command -v codepark >/dev/null 2>&1; then ${prefix}${globalCommand}; else ${prefix}${localCommand}; fi`;
 }
 
+export function defaultLauncherName() {
+  return isWindows() ? 'CodePark.cmd' : 'CodePark.command';
+}
+
+function buildWindowsCommand(cwd, args) {
+  const normalizedArgs = args.map(value => String(value));
+  const globalArgs = normalizedArgs.map(windowsCallQuote).join(' ');
+  const localCommand = [process.execPath, codeparkBinPath, ...normalizedArgs].map(windowsQuote).join(' ');
+  return [
+    `cd /d ${windowsQuote(cwd)}`,
+    'set "codeparkCommand="',
+    "for /f \"delims=\" %%I in ('where codepark 2^>nul') do (",
+    '  if /I not "%%~fI"=="%~f0" if not defined codeparkCommand set "codeparkCommand=%%~fI"',
+    ')',
+    'if defined codeparkCommand (',
+    `  call "%codeparkCommand%" ${globalArgs}`,
+    ') else (',
+    `  ${localCommand}`,
+    ')'
+  ].join('\r\n');
+}
+
 function resolveLauncherTarget(cwd, target) {
   const raw = String(target ?? '').trim();
   if (!raw) throw new Error('launcher target is required');
+  if (isWindows() && path.extname(raw).toLowerCase() !== '.cmd') {
+    throw new Error('Windows launcher targets must use the .cmd extension');
+  }
   if (path.isAbsolute(raw)) throw new Error('launcher target must be relative to the workspace');
   const resolved = path.resolve(cwd, raw);
   const relative = path.relative(cwd, resolved);
@@ -149,6 +202,14 @@ function shellQuote(value) {
 
 function shellSingleQuoteContent(value) {
   return String(value).replace(/'/g, "'\\''");
+}
+
+function windowsQuote(value) {
+  return `"${String(value).replace(/%/g, '%%').replace(/"/g, '""')}"`;
+}
+
+function windowsCallQuote(value) {
+  return `"${String(value).replace(/%/g, '%%%%').replace(/"/g, '""')}"`;
 }
 
 async function exists(file) {

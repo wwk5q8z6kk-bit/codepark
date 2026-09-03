@@ -7,8 +7,10 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createCheckpoint } from '../src/checkpoint.js';
 import { buildVisibleTerminalLaunchCommand } from '../src/cli.js';
+import { defaultLauncherName } from '../src/launcher.js';
 import { addTask, listTasks } from '../src/tasks.js';
 import { listWorkers, readWorker, stopWorker } from '../src/workers.js';
+import { nodeCommand, writeNodeExecutable, writeNodeScript } from './helpers/platform.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mockMcpServer = path.join(root, 'fixtures', 'mock-mcp-server.js');
@@ -596,7 +598,7 @@ test('workspace-boot command initializes local harness and dashboard without ope
   assert.match(result.stdout, /ok app: skipped/);
   await fs.stat(path.join(workspace, '.codepark', 'profile.json'));
   await fs.stat(path.join(workspace, '.codepark', 'hooks.json'));
-  await fs.stat(path.join(workspace, 'CodePark.command'));
+  await fs.stat(path.join(workspace, defaultLauncherName()));
   await fs.stat(path.join(workspace, '.codepark', 'dashboard.html'));
 });
 
@@ -731,10 +733,10 @@ test('launcher-install command writes a local launcher', async () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Wrote OpenCodePark\.command/);
   const text = await fs.readFile(path.join(workspace, 'OpenCodePark.command'), 'utf8');
-  assert.match(text, /command -v codepark/);
-  assert.match(text, /codepark' '--secure' '--cwd'/);
-  assert.match(text, /'workspace-boot'/);
-  assert.match(text, /bin\/codepark\.js/);
+  assert.match(text, process.platform === 'win32' ? /where codepark/ : /command -v codepark/);
+  assert.match(text, /--secure/);
+  assert.match(text, /workspace-boot/);
+  assert.match(text, process.platform === 'win32' ? /bin\\codepark\.js/ : /bin\/codepark\.js/);
 });
 
 test('install-local command bootstraps local CLI and workspace files', async () => {
@@ -767,9 +769,16 @@ test('install-local command bootstraps local CLI and workspace files', async () 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /CodePark local install/);
   assert.match(result.stdout, /ok command/);
-  assert.match(await fs.readlink(path.join(binDir, 'codepark')), /bin\/codepark\.js$/);
+  if (process.platform === 'win32') {
+    assert.match(await fs.readFile(path.join(binDir, 'codepark.cmd'), 'utf8'), /bin\\codepark\.js/);
+  } else {
+    assert.match(await fs.readlink(path.join(binDir, 'codepark')), /bin\/codepark\.js$/);
+  }
   assert.match(await fs.readFile(path.join(workspace, '.codepark', 'hooks.json'), 'utf8'), /npm run verify/);
-  assert.match(await fs.readFile(path.join(workspace, 'CodePark.command'), 'utf8'), /command -v codepark/);
+  assert.match(
+    await fs.readFile(path.join(workspace, defaultLauncherName()), 'utf8'),
+    process.platform === 'win32' ? /where codepark/ : /command -v codepark/
+  );
 });
 
 test('container-runtime command reports workspace container files', async () => {
@@ -798,7 +807,7 @@ test('compose commands use podman when available', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-command-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-command-bin-'));
   await fs.writeFile(path.join(workspace, 'compose.yaml'), 'services: {}\n');
-  await writeExecutable(path.join(bin, 'podman'), 'echo "cli podman $*"\n');
+  await writeNodeExecutable(bin, 'podman', "console.log(`cli podman ${process.argv.slice(2).join(' ')}`);");
   const env = {
     ...process.env,
     PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}`,
@@ -1777,11 +1786,7 @@ test('ask command reports Codex CLI progress on stderr', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-ask-progress-workspace-'));
   const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-cli-config-'));
   const sessionDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-cli-sessions-'));
-  const fakeCodexPath = path.join(workspace, 'codex');
-
-  await fs.writeFile(
-    fakeCodexPath,
-    `#!/usr/bin/env node
+  const fakeCodexPath = await writeNodeScript(workspace, 'codex', `
 const fs = require('node:fs/promises');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -1799,9 +1804,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   console.error(error.stack || error.message);
   process.exit(1);
 });
-`
-  );
-  await fs.chmod(fakeCodexPath, 0o755);
+`);
 
   const result = spawnSync(
     process.execPath,
@@ -1811,7 +1814,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${workspace}${path.delimiter}${process.env.PATH ?? ''}`,
+        CODEPARK_CODEX_COMMAND: nodeCommand(fakeCodexPath),
         CODEPARK_CODEX_PROGRESS_INTERVAL_MS: '10',
         CODEPARK_CONFIG_DIR: configDir,
         CODEPARK_SESSION_DIR: sessionDir
@@ -2755,15 +2758,12 @@ test('interactive mode packs and installs local skill packages', async () => {
 });
 
 async function writeMockExecutable(directory, lines) {
-  const file = path.join(directory, `mock-${Date.now()}-${Math.random().toString(36).slice(2)}.js`);
-  await fs.writeFile(file, `${lines.join('\n')}\n`);
-  await fs.chmod(file, 0o755);
-  return file;
-}
-
-async function writeExecutable(file, body) {
-  await fs.writeFile(file, `#!/bin/sh\n${body}`);
-  await fs.chmod(file, 0o755);
+  const file = await writeNodeScript(
+    directory,
+    `mock-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    lines.join('\n')
+  );
+  return nodeCommand(file);
 }
 
 async function writeWorkerRecords(workspace, records) {

@@ -13,8 +13,10 @@ test('writeTextAtomic writes content through a temp file and leaves no temp arti
   await writeTextAtomic(file, 'second\n', { mode: 0o600 });
 
   assert.equal(await fs.readFile(file, 'utf8'), 'second\n');
-  const stat = await fs.stat(file);
-  assert.equal(stat.mode & 0o777, 0o600);
+  if (process.platform !== 'win32') {
+    const stat = await fs.stat(file);
+    assert.equal(stat.mode & 0o777, 0o600);
+  }
   const leftovers = await fs.readdir(path.dirname(file));
   assert.deepEqual(leftovers, ['ledger.txt']);
 });

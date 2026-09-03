@@ -4,7 +4,7 @@ import { writeJsonAtomic } from './atomicWrite.js';
 import { detectPackageManager, readPackageJson } from './project.js';
 import { formatPackageScriptCommand, selectQualityGateScripts } from './qualityGate.js';
 
-const hooksPath = path.join('.codepark', 'hooks.json');
+const hooksPath = '.codepark/hooks.json';
 const auxiliaryScriptHooks = ['build', 'smoke', 'smoke:all'];
 const makeHookTargets = ['verify', 'check', 'lint', 'typecheck', 'test', 'build', 'smoke'];
 

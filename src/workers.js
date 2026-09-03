@@ -2,15 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { quoteShellWords } from './shellSyntax.js';
+import { parseShellWords, quoteShellWords } from './shellSyntax.js';
 import { writeJsonAtomic } from './atomicWrite.js';
 import { CodeParkError } from './errors.js';
 import { createSubprocessEnv } from './env.js';
 import { evaluateWorkspaceCommandPolicy } from './workspacePolicy.js';
 import { listTasks } from './tasks.js';
 
-const workersFile = path.join('.codepark', 'workers.json');
-const workersDir = path.join('.codepark', 'workers');
+const workersFile = '.codepark/workers.json';
+const workersDir = '.codepark/workers';
 const maxLogBytes = 120000;
 const stopGraceMs = 1000;
 const killGraceMs = 500;
@@ -83,8 +83,7 @@ export async function startWorker(cwd, options = {}) {
   child.unref();
 
   const runningWorker = { ...worker, status: 'running', pid: child.pid, updatedAt: new Date().toISOString() };
-  const latest = await readJsonFile(absoluteStatusPath).catch(() => null);
-  if (!latest?.finishedAt) await writeWorkerStatus(absoluteStatusPath, runningWorker);
+  await waitForRunnerStart(absoluteStatusPath, child.pid);
   ledger.workers.push(runningWorker);
   await writeWorkerLedger(cwd, ledger);
   return publicWorker(runningWorker);
@@ -513,6 +512,15 @@ async function readJsonFile(file) {
   return JSON.parse(await fs.readFile(file, 'utf8'));
 }
 
+async function waitForRunnerStart(statusPath, pid) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    const status = await readJsonFile(statusPath).catch(() => null);
+    if (status?.pid === pid || status?.finishedAt) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
 function normalizeWorker(worker) {
   const id = normalizeWorkerId(worker.id);
   if (!id) throw new CodeParkError('EARGS', 'worker id is required');
@@ -613,7 +621,10 @@ function buildCodexAgentCommand(cwd, prompt, options = {}) {
 }
 
 function normalizeCodexCommandPrefix(value) {
-  const parts = Array.isArray(value) ? value : [value];
+  const parts = Array.isArray(value) ? value : parseShellWords(value);
+  if (parts.some(part => typeof part !== 'string')) {
+    throw new CodeParkError('EARGS', 'codex command may not contain shell operators');
+  }
   const normalized = parts.map(part => String(part ?? '').trim()).filter(Boolean);
   if (!normalized.length) throw new CodeParkError('EARGS', 'codex command is required');
   return normalized;

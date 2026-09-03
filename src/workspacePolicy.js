@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { parseShellWords } from './shellSyntax.js';
 import { evaluateCommandPolicy } from './security/commandPolicy.js';
+import { isWindows } from './platform.js';
 import {
   initWorkspaceProfile,
   readWorkspaceProfile,
@@ -157,7 +158,7 @@ function normalizeCommandPolicy(value) {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
     denyCommands: normalizePatternList(input.denyCommands ?? input.deny_commands ?? defaultPolicy.commands.denyCommands)
-      .map(command => path.basename(command)),
+      .map(normalizeCommandName),
     denyPatterns: normalizePatternList(input.denyPatterns ?? input.deny_patterns ?? defaultPolicy.commands.denyPatterns)
   };
 }
@@ -261,7 +262,16 @@ function commandBlockedByWorkspacePolicy(command, policy) {
 
 function tokensBlocked(tokens, denyCommands) {
   const command = tokens[0];
-  return Boolean(command && denyCommands.includes(path.basename(command)));
+  return Boolean(command && denyCommands.includes(normalizeCommandName(command)));
+}
+
+function normalizeCommandName(command) {
+  const parts = String(command ?? '').split(/[\\/]/);
+  const basename = parts[parts.length - 1];
+  if (!isWindows()) return path.basename(basename);
+  return basename
+    .toLowerCase()
+    .replace(/\.(?:bat|cmd|com|exe)$/i, '');
 }
 
 function normalizePatchPath(rawPath) {

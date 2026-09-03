@@ -13,8 +13,8 @@ test('shell sessions preserve environment across commands', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-shell-'));
   const session = startShellSession(root, { id: 'env-test' });
   try {
-    await sendShellSessionCommand(session.id, 'FOO=codepark');
-    const result = await sendShellSessionCommand(session.id, 'echo $FOO');
+    await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'set FOO=codepark' : 'FOO=codepark');
+    const result = await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'echo %FOO%' : 'echo $FOO');
     assert.equal(result.exitCode, 0);
     assert.match(result.output, /codepark/);
   } finally {
@@ -28,7 +28,7 @@ test('shell sessions preserve cwd across commands', async () => {
   const session = startShellSession(root, { id: 'cwd-test' });
   try {
     await sendShellSessionCommand(session.id, 'cd subdir');
-    const result = await sendShellSessionCommand(session.id, 'pwd');
+    const result = await sendShellSessionCommand(session.id, process.platform === 'win32' ? 'cd' : 'pwd');
     assert.equal(result.exitCode, 0);
     assert.match(result.output, /subdir/);
   } finally {
@@ -46,7 +46,7 @@ test('stopping a shell session terminates a running child process', async () => 
     await assert.rejects(
       () => sendShellSessionCommand(
         session.id,
-        `node -e "setInterval(() => {}, 1000)" & echo $! > ${shellQuote(pidFile)}; wait`,
+        `${shellQuote(process.execPath)} -e "require('node:fs').writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1000)" ${shellQuote(pidFile)}`,
         { timeoutMs: 100 }
       ),
       /timed out/
@@ -65,6 +65,7 @@ test('stopping a shell session terminates a running child process', async () => 
 });
 
 function shellQuote(value) {
+  if (process.platform === 'win32') return `"${String(value).replaceAll('"', '""')}"`;
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 

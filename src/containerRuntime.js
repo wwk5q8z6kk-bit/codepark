@@ -6,6 +6,7 @@ import { addTask } from './tasks.js';
 import { startWorker } from './workers.js';
 import { createSubprocessEnv } from './env.js';
 import { evaluateCommandPolicy } from './security/commandPolicy.js';
+import { commandShell, executableNames } from './platform.js';
 
 const execAsync = promisify(exec);
 
@@ -113,7 +114,7 @@ export async function stopCompose(cwd, options = {}) {
     timeout: options.timeoutMs ?? 300000,
     maxBuffer: 1024 * 1024,
     env: createSubprocessEnv(process.env),
-    shell: process.env.SHELL || '/bin/sh'
+    shell: commandShell()
   });
   return {
     runtime: runtime.runtime,
@@ -184,7 +185,7 @@ export async function findExecutableOnPath(name, pathValue) {
   const directories = String(pathValue ?? '')
     .split(path.delimiter)
     .filter(Boolean);
-  const names = process.platform === 'win32' ? windowsExecutableNames(name) : [name];
+  const names = executableNames(name);
 
   for (const directory of directories) {
     for (const candidate of names) {
@@ -211,13 +212,6 @@ async function isExecutable(file) {
   } catch {
     return false;
   }
-}
-
-function windowsExecutableNames(name) {
-  const extensions = (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
-    .split(';')
-    .filter(Boolean);
-  return [name, ...extensions.map(extension => `${name}${extension.toLowerCase()}`), ...extensions.map(extension => `${name}${extension.toUpperCase()}`)];
 }
 
 function hasComposeFile(runtime) {

@@ -6,7 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTools } from '../src/tools.js';
+import { defaultLauncherName } from '../src/launcher.js';
 import { listWorkers, readWorker, stopWorker } from '../src/workers.js';
+import { nodeCommand, writeNodeExecutable, writeNodeScript } from './helpers/platform.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mockMcpServer = path.join(repoRoot, 'fixtures', 'mock-mcp-server.js');
@@ -329,7 +331,7 @@ test('workspace_boot tool initializes harness files and dashboard', async () => 
   assert.match(result, /ok dashboard: wrote/);
   await fs.stat(path.join(root, '.codepark', 'profile.json'));
   await fs.stat(path.join(root, '.codepark', 'hooks.json'));
-  await fs.stat(path.join(root, 'CodePark.command'));
+  await fs.stat(path.join(root, defaultLauncherName()));
   await fs.stat(path.join(root, '.codepark', 'dashboard.html'));
 
   const json = JSON.parse(await tools.execute('workspace_boot', { start: false, json: true }));
@@ -418,7 +420,7 @@ test('compose tools start and stop podman compose', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-tools-compose-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-tools-compose-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services: {}\n');
-  await writeExecutable(path.join(bin, 'podman'), 'echo "tool podman $*"\n');
+  await writeNodeExecutable(bin, 'podman', "console.log(`tool podman ${process.argv.slice(2).join(' ')}`);");
   const previousPath = process.env.PATH;
   process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ''}`;
 
@@ -1026,22 +1028,19 @@ test('install_launcher tool writes a clickable launcher', async () => {
   assert.match(result, /Wrote OpenCodePark\.command/);
 
   const text = await fs.readFile(path.join(workspace, 'OpenCodePark.command'), 'utf8');
-  assert.match(text, /command -v codepark/);
-  assert.match(text, /codepark' '--secure' '--cwd'/);
-  assert.match(text, /'workspace-boot'/);
-  assert.match(text, /bin\/codepark\.js/);
+  assert.match(text, process.platform === 'win32' ? /where codepark/ : /command -v codepark/);
+  assert.match(text, /--secure/);
+  assert.match(text, /workspace-boot/);
+  assert.match(text, process.platform === 'win32' ? /bin\\codepark\.js/ : /bin\/codepark\.js/);
 });
 
 async function writeMockExecutable(directory, lines) {
-  const file = path.join(directory, `mock-${Date.now()}-${Math.random().toString(36).slice(2)}.js`);
-  await fs.writeFile(file, `${lines.join('\n')}\n`);
-  await fs.chmod(file, 0o755);
-  return file;
-}
-
-async function writeExecutable(file, body) {
-  await fs.writeFile(file, `#!/bin/sh\n${body}`);
-  await fs.chmod(file, 0o755);
+  const file = await writeNodeScript(
+    directory,
+    `mock-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    lines.join('\n')
+  );
+  return nodeCommand(file);
 }
 
 test('local skill tools list and read workspace skills', async () => {

@@ -94,6 +94,23 @@ test('workspace command policy blocks profile commands and patterns', async () =
   assert.equal(await evaluateWorkspaceCommandPolicy(root, 'npm run deploy -- --production'), 'disabled');
 });
 
+test('workspace command policy blocks Windows executable aliases', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-policy-windows-'));
+  await fs.mkdir(path.join(root, '.codepark'), { recursive: true });
+  await fs.writeFile(path.join(root, '.codepark', 'profile.json'), `${JSON.stringify({
+    policy: {
+      commands: {
+        denyCommands: ['git']
+      }
+    }
+  }, null, 2)}\n`);
+
+  await runAsWindows(async () => {
+    assert.equal(await evaluateWorkspaceCommandPolicy(root, 'GIT.EXE status'), 'disabled');
+    assert.equal(await evaluateWorkspaceCommandPolicy(root, 'git.cmd status'), 'disabled');
+  });
+});
+
 test('workspace patch policy extracts and checks modified file paths', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-policy-patch-'));
   await fs.mkdir(path.join(root, '.codepark'), { recursive: true });
@@ -123,3 +140,13 @@ test('workspace patch policy extracts and checks modified file paths', async () 
     /blocked by workspace write policy/
   );
 });
+
+async function runAsWindows(run) {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(process, 'platform', originalPlatform);
+  }
+}

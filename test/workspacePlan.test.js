@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createWorkspacePlan, formatWorkspacePlan } from '../src/workspacePlan.js';
+import { defaultLauncherName } from '../src/launcher.js';
 
 test('createWorkspacePlan inspects app launch, hooks, profile, launcher, and next actions', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-workspace-plan-'));
@@ -105,7 +106,7 @@ test('createWorkspacePlan marks stale launchers as needing update', async () => 
       verify: ['npm run verify']
     }
   }));
-  await fs.writeFile(path.join(root, 'CodePark.command'), [
+  await fs.writeFile(path.join(root, defaultLauncherName()), [
     '#!/bin/sh',
     'set -eu',
     "cd . && if command -v codepark >/dev/null 2>&1; then exec codepark --secure; else exec node ./bin/codepark.js --secure; fi",

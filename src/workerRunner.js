@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { writeJsonAtomic } from './atomicWrite.js';
 import { createSubprocessEnv } from './env.js';
+import { commandShell } from './platform.js';
 
 const [statusPath, logPath, cwd, command, maxRuntimeMsValue, messagePath] = process.argv.slice(2);
 let child = null;
@@ -32,7 +33,7 @@ if (messagePath) {
 
 child = spawn(command, {
   cwd,
-  shell: process.platform === 'win32' ? true : (process.env.SHELL || '/bin/sh'),
+  shell: commandShell(),
   env: createSubprocessEnv(process.env),
   windowsHide: true,
   stdio: [messagePath ? 'pipe' : 'ignore', 'pipe', 'pipe']

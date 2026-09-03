@@ -19,3 +19,16 @@ test('quoteShellWords preserves embedded single quotes for shell execution', () 
     "node -e 'console.log('\"'\"'done'\"'\"')'"
   );
 });
+
+test('quoteShellWords preserves literal percent signs for Windows shell execution', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  try {
+    assert.equal(
+      quoteShellWords(['C:\\workspace-%PROJECT%\\.codepark\\agent.json']),
+      '"C:\\workspace-%%PROJECT%%\\.codepark\\agent.json"'
+    );
+  } finally {
+    Object.defineProperty(process, 'platform', originalPlatform);
+  }
+});

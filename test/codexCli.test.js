@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { askCodexCli, formatMessagesForCodex, isCodexCliConfig } from '../src/codexCli.js';
+import { writeNodeScript } from './helpers/platform.js';
 
 test('isCodexCliConfig detects codex provider', () => {
   assert.equal(isCodexCliConfig({ provider: 'codex', baseUrl: '' }), true);
@@ -24,15 +25,22 @@ test('formatMessagesForCodex includes role labels and text content', () => {
   assert.doesNotMatch(prompt, /ASSISTANT/);
 });
 
+test('askCodexCli rejects shell operators in configured command prefixes', async () => {
+  await assert.rejects(
+    () => askCodexCli({
+      messages: [{ role: 'user', content: 'Summarize this project.' }],
+      config: { provider: 'codex', model: 'codex-cli-default' },
+      cwd: process.cwd(),
+      codexCommand: 'codex && unsafe-command',
+      progressIntervalMs: 0
+    }),
+    /codex command may not contain shell operators/
+  );
+});
+
 test('askCodexCli reports progress while the child process is running', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-codex-test-'));
-  const fakeCodexPath = path.join(tempDir, 'codex');
-  const originalPath = process.env.PATH;
-  const statuses = [];
-
-  await fs.writeFile(
-    fakeCodexPath,
-    `#!/usr/bin/env node
+  const fakeCodexPath = await writeNodeScript(tempDir, 'codex', `
 const fs = require('node:fs/promises');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -50,16 +58,15 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   console.error(error.stack || error.message);
   process.exit(1);
 });
-`,
-    { mode: 0o755 }
-  );
+`);
+  const statuses = [];
 
-  process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ''}`;
   try {
     const content = await askCodexCli({
       messages: [{ role: 'user', content: 'Summarize this project.' }],
       config: { provider: 'codex', model: 'codex-cli-default' },
       cwd: tempDir,
+      codexCommand: [process.execPath, fakeCodexPath],
       onStatus: status => statuses.push(status),
       progressIntervalMs: 10
     });
@@ -68,21 +75,16 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.ok(statuses.length >= 1);
     assert.match(statuses.at(-1), /Codex CLI.+elapsed/);
   } finally {
-    process.env.PATH = originalPath;
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
 
 test('askCodexCli uses read-only sandbox and sanitized env in secure mode', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-codex-secure-'));
-  const fakeCodexPath = path.join(tempDir, 'codex');
   const recordPath = path.join(tempDir, 'record.json');
-  const originalPath = process.env.PATH;
   const originalCodeParkKey = process.env.CODEPARK_API_KEY;
 
-  await fs.writeFile(
-    fakeCodexPath,
-    `#!/usr/bin/env node
+  const fakeCodexPath = await writeNodeScript(tempDir, 'codex', `
 const fs = require('node:fs/promises');
 
 (async () => {
@@ -96,11 +98,8 @@ const fs = require('node:fs/promises');
   console.error(error.stack || error.message);
   process.exit(1);
 });
-`,
-    { mode: 0o755 }
-  );
+`);
 
-  process.env.PATH = `${tempDir}${path.delimiter}${originalPath ?? ''}`;
   process.env.CODEPARK_API_KEY = 'sk-should-not-leak';
   process.env.CODEPARK_TEST_RECORD = recordPath;
   try {
@@ -108,6 +107,7 @@ const fs = require('node:fs/promises');
       messages: [{ role: 'user', content: 'Summarize this project.' }],
       config: { provider: 'codex', model: 'codex-cli-default', secureMode: true },
       cwd: tempDir,
+      codexCommand: [process.execPath, fakeCodexPath],
       progressIntervalMs: 0
     });
     const record = JSON.parse(await fs.readFile(recordPath, 'utf8'));
@@ -117,7 +117,6 @@ const fs = require('node:fs/promises');
     assert.equal(record.args[sandboxIndex + 1], 'read-only');
     assert.equal(record.codeparkApiKey, '');
   } finally {
-    process.env.PATH = originalPath;
     if (originalCodeParkKey === undefined) delete process.env.CODEPARK_API_KEY;
     else process.env.CODEPARK_API_KEY = originalCodeParkKey;
     delete process.env.CODEPARK_TEST_RECORD;
