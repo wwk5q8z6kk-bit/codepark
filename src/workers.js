@@ -75,7 +75,7 @@ export async function startWorker(cwd, options = {}) {
   if (messagePath) runnerArgs.push(path.join(cwd, messagePath));
   const child = spawn(process.execPath, runnerArgs, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached: true,
     windowsHide: true,
     stdio: 'ignore',
     env: createSubprocessEnv(process.env)
