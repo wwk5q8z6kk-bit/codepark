@@ -716,10 +716,11 @@ test('policy preset commands list and apply presets', async () => {
 
 test('launcher-install command writes a local launcher', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-launcher-command-'));
+  const launcherName = process.platform === 'win32' ? 'OpenCodePark.cmd' : 'OpenCodePark.command';
 
   const result = spawnSync(
     process.execPath,
-    [path.join(root, 'bin', 'codepark.js'), '--cwd', workspace, 'launcher-install', '--target', 'OpenCodePark.command'],
+    [path.join(root, 'bin', 'codepark.js'), '--cwd', workspace, 'launcher-install', '--target', launcherName],
     {
       cwd: root,
       encoding: 'utf8',
@@ -731,8 +732,8 @@ test('launcher-install command writes a local launcher', async () => {
   );
 
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Wrote OpenCodePark\.command/);
-  const text = await fs.readFile(path.join(workspace, 'OpenCodePark.command'), 'utf8');
+  assert.match(result.stdout, new RegExp(`Wrote ${escapeRegExp(launcherName)}`));
+  const text = await fs.readFile(path.join(workspace, launcherName), 'utf8');
   assert.match(text, process.platform === 'win32' ? /where codepark/ : /command -v codepark/);
   assert.match(text, /--secure/);
   assert.match(text, /workspace-boot/);
@@ -824,7 +825,7 @@ test('compose commands use podman when available', async () => {
   assert.match(started.stdout, /command: podman compose up -d/);
 
   const worker = await waitForWorker(workspace, worker => worker.id === 'cli-compose' && worker.status !== 'running' && worker.status !== 'starting' && !isPidAlive(worker.pid));
-  assert.equal(worker.status, 'done');
+  await assertWorkerStatus(workspace, worker, 'done');
 
   const stopped = spawnSync(
     process.execPath,
@@ -1088,7 +1089,7 @@ test('worker commands start and inspect task-scoped background workers', async (
   assert.match(started.stdout, /Worker started:/);
 
   const worker = await waitForWorker(workspace, worker => worker.status !== 'running');
-  assert.equal(worker.status, 'done');
+  await assertWorkerStatus(workspace, worker, 'done');
   const listed = spawnSync(
     process.execPath,
     [path.join(root, 'bin', 'codepark.js'), '--cwd', workspace, 'workers', task.id],
@@ -1161,7 +1162,7 @@ test('app-start command creates a managed app worker', async () => {
   assert.match(started.stdout, /command: npm run dev/);
 
   const worker = await waitForWorker(workspace, worker => worker.id === 'cli-app' && worker.status !== 'running');
-  assert.equal(worker.status, 'done');
+  await assertWorkerStatus(workspace, worker, 'done');
 
   const read = spawnSync(
     process.execPath,
@@ -1275,7 +1276,7 @@ test('workers --json emits structured worker metadata', async () => {
   assert.equal(parsed.workers.length, 1);
   assert.equal(parsed.workers[0].id, worker.id);
   assert.equal(parsed.workers[0].taskId, task.id);
-  assert.equal(parsed.workers[0].status, 'done');
+  await assertWorkerStatus(workspace, parsed.workers[0], 'done');
 });
 
 test('worker-read --tail limits log output to recent lines', async () => {
@@ -2805,6 +2806,12 @@ async function waitForWorker(cwd, predicate) {
     await new Promise(resolve => setTimeout(resolve, 25));
   }
   throw new Error('worker did not reach expected state');
+}
+
+async function assertWorkerStatus(cwd, worker, expected) {
+  if (worker.status === expected) return;
+  const read = await readWorker(cwd, worker.id);
+  assert.equal(worker.status, expected, `Worker ${worker.id} output:\n${read.output}`);
 }
 
 function isPidAlive(pid) {
