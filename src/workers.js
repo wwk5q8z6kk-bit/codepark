@@ -2,15 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { quoteShellWords } from './shellSyntax.js';
+import { parseShellWords, quoteShellWords } from './shellSyntax.js';
 import { writeJsonAtomic } from './atomicWrite.js';
 import { CodeParkError } from './errors.js';
 import { createSubprocessEnv } from './env.js';
 import { evaluateWorkspaceCommandPolicy } from './workspacePolicy.js';
 import { listTasks } from './tasks.js';
 
-const workersFile = path.join('.codepark', 'workers.json');
-const workersDir = path.join('.codepark', 'workers');
+const workersFile = '.codepark/workers.json';
+const workersDir = '.codepark/workers';
 const maxLogBytes = 120000;
 const stopGraceMs = 1000;
 const killGraceMs = 500;
@@ -75,7 +75,7 @@ export async function startWorker(cwd, options = {}) {
   if (messagePath) runnerArgs.push(path.join(cwd, messagePath));
   const child = spawn(process.execPath, runnerArgs, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached: true,
     windowsHide: true,
     stdio: 'ignore',
     env: createSubprocessEnv(process.env)
@@ -83,8 +83,6 @@ export async function startWorker(cwd, options = {}) {
   child.unref();
 
   const runningWorker = { ...worker, status: 'running', pid: child.pid, updatedAt: new Date().toISOString() };
-  const latest = await readJsonFile(absoluteStatusPath).catch(() => null);
-  if (!latest?.finishedAt) await writeWorkerStatus(absoluteStatusPath, runningWorker);
   ledger.workers.push(runningWorker);
   await writeWorkerLedger(cwd, ledger);
   return publicWorker(runningWorker);
@@ -450,7 +448,13 @@ function resolveWorkerFromList(workers, id) {
 
 async function hydrateWorker(cwd, worker) {
   const status = await readJsonFile(path.join(cwd, worker.statusPath)).catch(() => ({}));
-  const merged = normalizeWorker({ ...worker, ...status });
+  const merged = normalizeWorker({
+    ...worker,
+    ...status,
+    ...(worker.status === 'running' && status.status === 'starting'
+      ? { status: 'running', pid: worker.pid }
+      : {})
+  });
   if ((merged.status === 'running' || merged.status === 'starting') && merged.pid && !isProcessAlive(merged.pid)) {
     if (isRecentlyUpdated(merged.updatedAt, staleWorkerGraceMs)) return publicWorker(merged);
     const now = new Date().toISOString();
@@ -613,7 +617,10 @@ function buildCodexAgentCommand(cwd, prompt, options = {}) {
 }
 
 function normalizeCodexCommandPrefix(value) {
-  const parts = Array.isArray(value) ? value : [value];
+  const parts = Array.isArray(value) ? value : parseShellWords(value);
+  if (parts.some(part => typeof part !== 'string')) {
+    throw new CodeParkError('EARGS', 'codex command may not contain shell operators');
+  }
   const normalized = parts.map(part => String(part ?? '').trim()).filter(Boolean);
   if (!normalized.length) throw new CodeParkError('EARGS', 'codex command is required');
   return normalized;

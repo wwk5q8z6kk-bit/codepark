@@ -3,7 +3,7 @@ import path from 'node:path';
 import { writeJsonAtomic } from './atomicWrite.js';
 import { CodeParkError } from './errors.js';
 
-const taskFile = path.join('.codepark', 'tasks.json');
+const taskFile = '.codepark/tasks.json';
 
 export async function addTask(cwd, options = {}) {
   const title = String(options.title ?? '').trim();

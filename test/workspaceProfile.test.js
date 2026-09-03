@@ -21,7 +21,7 @@ test('initWorkspaceProfile writes inferred local workspace contract', async () =
   await fs.writeFile(path.join(root, 'Containerfile'), 'FROM scratch\n');
 
   const result = await initWorkspaceProfile(root);
-  assert.equal(result.path, path.join('.codepark', 'profile.json'));
+  assert.equal(result.path, '.codepark/profile.json');
   assert.equal(result.overwritten, false);
   assert.match(formatWorkspaceProfileInit(result), /Wrote \.codepark\/profile\.json/);
 

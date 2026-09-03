@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { writeJsonAtomic } from './atomicWrite.js';
 import { createSubprocessEnv } from './env.js';
+import { commandShell } from './platform.js';
 
 const [statusPath, logPath, cwd, command, maxRuntimeMsValue, messagePath] = process.argv.slice(2);
 let child = null;
@@ -14,6 +15,7 @@ let maxRuntimeTimer = null;
 let messageOffset = 0;
 let messageRemainder = '';
 let deliveringMessages = false;
+let statusWrite = Promise.resolve();
 
 if (!statusPath || !logPath || !cwd || !command) {
   process.stderr.write('workerRunner requires statusPath, logPath, cwd, and command\n');
@@ -32,21 +34,11 @@ if (messagePath) {
 
 child = spawn(command, {
   cwd,
-  shell: process.platform === 'win32' ? true : (process.env.SHELL || '/bin/sh'),
+  shell: commandShell(),
   env: createSubprocessEnv(process.env),
   windowsHide: true,
   stdio: [messagePath ? 'pipe' : 'ignore', 'pipe', 'pipe']
 });
-
-await updateStatus({
-  status: 'running',
-  pid: process.pid,
-  commandPid: child.pid,
-  updatedAt: new Date().toISOString()
-});
-
-if (messagePath) startMessagePump();
-startMaxRuntimeTimer();
 
 child.stdout.on('data', chunk => {
   log.write(chunk);
@@ -65,6 +57,16 @@ child.on('exit', async code => {
   if (stopping) return;
   await finish(code === 0 ? 'done' : 'failed', code);
 });
+
+await updateStatus({
+  status: 'running',
+  pid: process.pid,
+  commandPid: child.pid,
+  updatedAt: new Date().toISOString()
+});
+
+if (messagePath) startMessagePump();
+startMaxRuntimeTimer();
 
 process.on('SIGTERM', async () => {
   stopping = true;
@@ -117,10 +119,14 @@ async function expireWorker(maxRuntimeMs) {
 }
 
 async function updateStatus(patch) {
-  const current = await fs.readFile(statusPath, 'utf8')
-    .then(text => JSON.parse(text))
-    .catch(() => ({}));
-  await writeJsonAtomic(statusPath, { ...current, ...patch });
+  const update = statusWrite.then(async () => {
+    const current = await fs.readFile(statusPath, 'utf8')
+      .then(text => JSON.parse(text))
+      .catch(() => ({}));
+    await writeJsonAtomic(statusPath, { ...current, ...patch });
+  });
+  statusWrite = update.catch(() => {});
+  return update;
 }
 
 function appendLog(value) {

@@ -87,7 +87,7 @@ export async function createBrowserDashboard(cwd, config, options = {}) {
     readiness,
     policy
   };
-  const relativePath = path.join('.codepark', 'dashboard.html');
+  const relativePath = '.codepark/dashboard.html';
   const file = path.join(cwd, relativePath);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await writeTextAtomic(file, renderDashboardHtml(payload));

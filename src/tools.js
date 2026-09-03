@@ -3,6 +3,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createSubprocessEnv } from './env.js';
+import { commandShell } from './platform.js';
 import {
   createAssessmentTasks,
   createProjectAssessment,
@@ -441,7 +442,7 @@ async function executeTool({ name, args, cwd, assumeYes, rl, config }) {
       timeout,
       maxBuffer: 1024 * 1024,
       env: createSubprocessEnv(process.env),
-      shell: process.env.SHELL || '/bin/sh'
+      shell: commandShell()
     });
     return trimOutput([stdout, stderr].filter(Boolean).join('\n'));
   }
@@ -497,7 +498,7 @@ async function executeTool({ name, args, cwd, assumeYes, rl, config }) {
       timeout,
       maxBuffer: 1024 * 1024,
       env: createSubprocessEnv(process.env),
-      shell: process.env.SHELL || '/bin/sh'
+      shell: commandShell()
     });
     return trimOutput([stdout, stderr].filter(Boolean).join('\n'));
   }
@@ -1766,7 +1767,7 @@ function toolSchemas(options = {}) {
         parameters: {
           type: 'object',
           properties: {
-            target: { type: 'string', description: 'Relative launcher path. Defaults to CodePark.command.' },
+            target: { type: 'string', description: 'Relative launcher path. Defaults to the platform launcher name.' },
             force: { type: 'boolean', description: 'Replace an existing launcher file.' }
           }
         }

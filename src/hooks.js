@@ -4,9 +4,10 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createSubprocessEnv } from './env.js';
 import { evaluateWorkspaceCommandPolicy } from './workspacePolicy.js';
+import { commandShell } from './platform.js';
 
 const execAsync = promisify(exec);
-const hooksFile = path.join('.codepark', 'hooks.json');
+const hooksFile = '.codepark/hooks.json';
 
 export async function listHooks(cwd) {
   const config = await readHooksConfig(cwd);
@@ -29,7 +30,7 @@ export async function runHook(cwd, name, options = {}) {
         timeout: options.timeoutMs ?? 120000,
         maxBuffer: 1024 * 1024,
         env: createSubprocessEnv(process.env),
-        shell: process.env.SHELL || '/bin/sh'
+        shell: commandShell()
       });
       steps.push({ command, stdout, stderr });
     } catch (error) {
