@@ -48,7 +48,13 @@ import { formatGitSummary, gitDiff, gitStatus, gitSummary } from './git.js';
 import { formatHarnessInit, initHarness } from './harness.js';
 import { formatHookList, formatHookRun, listHooks, runHook } from './hooks.js';
 import { formatLauncherInstall, installLauncher } from './launcher.js';
-import { callWorkspaceMcpTool, formatMcpToolCallResult, formatWorkspaceMcpTools, listWorkspaceMcpTools } from './mcp/runtime.js';
+import {
+  callWorkspaceMcpTool,
+  formatMcpApproval,
+  formatMcpToolCallResult,
+  formatWorkspaceMcpTools,
+  listWorkspaceMcpTools
+} from './mcp/runtime.js';
 import { readImageInfo } from './imageInfo.js';
 import { createReadinessReport, formatReadinessReport, formatReadinessReportJson } from './readiness.js';
 import { detectPackageManager, projectOverview, readPackageJson } from './project.js';
@@ -309,7 +315,11 @@ async function executeTool({ name, args, cwd, assumeYes, rl, config }) {
 
   if (name === 'doctor') {
     if (config.localOnly && args.mcp_health) throw new Error('doctor mcp_health is disabled in local-only mode');
-    const report = await runDoctor(config, { cwd, mcpHealth: Boolean(args.mcp_health) });
+    const report = await runDoctor(config, {
+      cwd,
+      mcpHealth: Boolean(args.mcp_health),
+      approveMcp: approval => confirm(rl, assumeYes, formatMcpApproval(approval))
+    });
     return args.json ? formatDoctorReportJson(report) : formatDoctorReport(report);
   }
 
@@ -518,7 +528,9 @@ async function executeTool({ name, args, cwd, assumeYes, rl, config }) {
 
   if (name === 'mcp_list_tools') {
     if (config.localOnly) throw new Error('mcp_list_tools is disabled in local-only mode');
-    return formatWorkspaceMcpTools(await listWorkspaceMcpTools(cwd));
+    return formatWorkspaceMcpTools(await listWorkspaceMcpTools(cwd, {
+      approve: approval => confirm(rl, assumeYes, formatMcpApproval(approval))
+    }));
   }
 
   if (name === 'mcp_call_tool') {
@@ -531,7 +543,8 @@ async function executeTool({ name, args, cwd, assumeYes, rl, config }) {
       cwd,
       serverName,
       toolName,
-      args: args.arguments && typeof args.arguments === 'object' ? args.arguments : {}
+      args: args.arguments && typeof args.arguments === 'object' ? args.arguments : {},
+      approve: approval => confirm(rl, assumeYes, formatMcpApproval(approval))
     });
     return formatMcpToolCallResult(result);
   }
@@ -800,7 +813,7 @@ function trimPatchForPrompt(patch) {
   return patch.length > max ? `${patch.slice(0, max)}\n[patch truncated in prompt]` : patch;
 }
 
-async function confirm(rl, assumeYes, prompt) {
+export async function confirm(rl, assumeYes, prompt) {
   if (assumeYes) return;
   if (!rl) throw new Error(`confirmation required: ${prompt}`);
   const answer = await rl.question(`${prompt} [y/N] `);

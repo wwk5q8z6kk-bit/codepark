@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getConfigDir } from '../config.js';
 
 export function normalizeMcpConfig(config) {
   return {
@@ -8,13 +9,51 @@ export function normalizeMcpConfig(config) {
 }
 
 export async function loadWorkspaceMcpConfig(cwd) {
-  const file = path.join(cwd, '.codepark.mcp.json');
+  return loadMcpConfigFile(path.join(cwd, '.codepark.mcp.json'), {
+    source: 'workspace',
+    trusted: false
+  });
+}
+
+export async function loadMcpConfig(cwd, options = {}) {
+  const [workspace, user] = await Promise.all([
+    loadWorkspaceMcpConfig(cwd),
+    loadUserMcpConfig(options)
+  ]);
+  const serverSources = Object.create(null);
+  for (const name of Object.keys(workspace.config.servers)) {
+    serverSources[name] = { file: workspace.file, source: workspace.source, trusted: false };
+  }
+  for (const name of Object.keys(user.config.servers)) {
+    serverSources[name] = { file: user.file, source: user.source, trusted: true };
+  }
+
+  return {
+    file: workspace.file,
+    config: {
+      servers: { ...workspace.config.servers, ...user.config.servers }
+    },
+    exists: workspace.exists || user.exists,
+    sources: [workspace, user],
+    serverSources
+  };
+}
+
+export async function loadUserMcpConfig(options = {}) {
+  const file = options.userConfigFile
+    ?? path.join(options.configDir ?? getConfigDir(), 'mcp.json');
+  return loadMcpConfigFile(file, { source: 'user', trusted: true });
+}
+
+async function loadMcpConfigFile(file, { source, trusted }) {
   const text = await fs.readFile(file, 'utf8').catch(error => {
     if (error?.code === 'ENOENT') return null;
     throw error;
   });
-  if (text === null) return { file, config: normalizeMcpConfig({}), exists: false };
-  return { file, config: normalizeMcpConfig(JSON.parse(text)), exists: true };
+  if (text === null) {
+    return { file, config: normalizeMcpConfig({}), exists: false, source, trusted };
+  }
+  return { file, config: normalizeMcpConfig(JSON.parse(text)), exists: true, source, trusted };
 }
 
 export function formatMcpConfig({ file, config, exists }) {

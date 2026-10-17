@@ -317,7 +317,7 @@ test('doctor can probe configured MCP server health', async () => {
 
   const result = spawnSync(
     process.execPath,
-    [path.join(root, 'bin', 'codepark.js'), '--cwd', workspace, 'doctor', '--mcp-health'],
+    [path.join(root, 'bin', 'codepark.js'), '--cwd', workspace, '--yes', 'doctor', '--mcp-health'],
     {
       cwd: root,
       encoding: 'utf8',
@@ -1904,7 +1904,7 @@ test('interactive mode launches and calls configured MCP servers', async () => {
 
   const result = spawnSync(
     process.execPath,
-    ['./bin/codepark.js', '--cwd', workspace],
+    ['./bin/codepark.js', '--cwd', workspace, '--yes'],
     {
       cwd: root,
       encoding: 'utf8',
@@ -2225,7 +2225,7 @@ test('interactive doctor can probe configured MCP server health', async () => {
 
   const result = spawnSync(
     process.execPath,
-    ['./bin/codepark.js', '--cwd', workspace],
+    ['./bin/codepark.js', '--cwd', workspace, '--yes'],
     {
       cwd: root,
       encoding: 'utf8',

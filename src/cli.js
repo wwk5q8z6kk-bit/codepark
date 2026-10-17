@@ -40,7 +40,13 @@ import { gitDiff, gitSummary, formatGitSummary } from './git.js';
 import { formatHarnessInit, initHarness } from './harness.js';
 import { buildCodeParkShellCommand, formatLauncherInstall, installLauncher } from './launcher.js';
 import { formatLocalInstall, installLocal } from './localInstall.js';
-import { callWorkspaceMcpTool, formatMcpToolCallResult, formatWorkspaceMcpTools, listWorkspaceMcpTools } from './mcp/runtime.js';
+import {
+  callWorkspaceMcpTool,
+  formatMcpApproval,
+  formatMcpToolCallResult,
+  formatWorkspaceMcpTools,
+  listWorkspaceMcpTools
+} from './mcp/runtime.js';
 import { runOnboarding, shouldRunFirstRunOnboarding } from './onboarding.js';
 import { projectOverview } from './project.js';
 import { readImageInfo } from './imageInfo.js';
@@ -88,7 +94,7 @@ import {
   reopenTask,
   updateTask
 } from './tasks.js';
-import { createTools } from './tools.js';
+import { confirm, createTools } from './tools.js';
 import {
   formatWorkerList,
   formatWorkerListJson,
@@ -761,7 +767,11 @@ export async function main(argv = process.argv.slice(2)) {
     if (config.localOnly && parsed.flags.mcpHealth) {
       throw new CodeParkError('EDISABLED', 'doctor --mcp-health is disabled in local-only mode');
     }
-    const report = await runDoctor(config, { cwd, mcpHealth: Boolean(parsed.flags.mcpHealth) });
+    const report = await runDoctor(config, {
+      cwd,
+      mcpHealth: Boolean(parsed.flags.mcpHealth),
+      approveMcp: approval => confirmDirectMcpAction(assumeYes, approval)
+    });
     console.log(parsed.flags.json ? formatDoctorReportJson(report) : formatDoctorReport(report));
     return;
   }
@@ -842,6 +852,22 @@ export async function main(argv = process.argv.slice(2)) {
     }),
     setCwd: next => { cwd = next; }
   });
+}
+
+async function confirmDirectMcpAction(assumeYes, approval) {
+  if (assumeYes) return;
+  if (!input.isTTY) {
+    throw new CodeParkError(
+      'ECONFIRM',
+      `confirmation required: ${formatMcpApproval(approval)}; rerun with --yes to explicitly approve`
+    );
+  }
+  const confirmationRl = readline.createInterface({ input, output });
+  try {
+    await confirm(confirmationRl, false, formatMcpApproval(approval));
+  } finally {
+    confirmationRl.close();
+  }
 }
 
 function parseArgs(argv) {
@@ -1176,6 +1202,7 @@ async function handleSlashCommand({
   const [command, ...rest] = splitCommand(line);
   const arg = rest.join(' ').trim();
   const tools = createTools({ cwd: getCwd(), assumeYes, rl, config });
+  const approveMcp = approval => confirm(rl, assumeYes, formatMcpApproval(approval));
 
   if (command === '/exit' || command === '/quit') return true;
   if (command === '/help') {
@@ -1702,7 +1729,7 @@ async function handleSlashCommand({
   }
   if (command === '/mcp') {
     if (config.localOnly) throw new CodeParkError('EDISABLED', '/mcp is disabled in local-only mode');
-    console.log(formatWorkspaceMcpTools(await listWorkspaceMcpTools(getCwd())));
+    console.log(formatWorkspaceMcpTools(await listWorkspaceMcpTools(getCwd(), { approve: approveMcp })));
     return false;
   }
   if (command === '/mcp-call') {
@@ -1714,7 +1741,8 @@ async function handleSlashCommand({
       cwd: getCwd(),
       serverName,
       toolName,
-      args: parseJsonObject(jsonArgs || '{}')
+      args: parseJsonObject(jsonArgs || '{}'),
+      approve: approveMcp
     });
     console.log(formatMcpToolCallResult(result));
     return false;
@@ -1724,7 +1752,7 @@ async function handleSlashCommand({
     if (config.localOnly && mcpHealth) {
       throw new CodeParkError('EDISABLED', '/doctor --mcp-health is disabled in local-only mode');
     }
-    const report = await runDoctor(config, { cwd: getCwd(), mcpHealth });
+    const report = await runDoctor(config, { cwd: getCwd(), mcpHealth, approveMcp });
     console.log(json ? formatDoctorReportJson(report) : formatDoctorReport(report));
     return false;
   }
