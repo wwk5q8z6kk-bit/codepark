@@ -1,4 +1,6 @@
-const operators = ['&&', '||', '>>', '<<', '|', ';', '<', '>'];
+import { isWindows } from './platform.js';
+
+const operators = ['&&', '||', '>>', '<<', '&', '|', ';', '<', '>'];
 
 export function parseShellWords(value) {
   const text = String(value ?? '');
@@ -16,7 +18,7 @@ export function parseShellWords(value) {
     if (quote) {
       if (character === quote) {
         quote = '';
-      } else if (character === '\\' && quote === '"' && index + 1 < text.length) {
+      } else if (character === '\\' && quote === '"' && !isWindows() && index + 1 < text.length) {
         word += text[index + 1];
         index += 1;
       } else {
@@ -24,11 +26,16 @@ export function parseShellWords(value) {
       }
       continue;
     }
-    if (character === '"' || character === "'") {
+    if (character === '"' || (!isWindows() && character === "'")) {
       quote = character;
       continue;
     }
-    if (character === '\\' && index + 1 < text.length) {
+    if (character === '\\' && !isWindows() && index + 1 < text.length) {
+      word += text[index + 1];
+      index += 1;
+      continue;
+    }
+    if (character === '^' && isWindows() && index + 1 < text.length) {
       word += text[index + 1];
       index += 1;
       continue;
@@ -57,5 +64,6 @@ export function quoteShellWords(values) {
 export function quoteShellWord(value) {
   const text = String(value ?? '');
   if (/^[A-Za-z0-9_./:=+,-]+$/.test(text)) return text;
+  if (isWindows()) return `"${text.replaceAll('%', '%%').replaceAll('"', '""')}"`;
   return `'${text.split("'").join("'\"'\"'")}'`;
 }

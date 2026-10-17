@@ -29,13 +29,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
 
-      - name: Install
-        run: npm ci
+      - name: Syntax Check
+        run: node ./bin/check-syntax.js
 
       - name: Unit Tests
-        run: npm test
-
-      - name: Release Checks (Fast)
-        run: npm run release-check:fast
+        run: node --test

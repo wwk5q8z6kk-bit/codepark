@@ -36,7 +36,8 @@ node ./bin/codepark.js install-local --force
 ```
 
 This installs or updates the local `codepark` command, writes the workspace
-profile and inferred hooks, and creates `CodePark.command` for secure local
+profile and inferred hooks, and creates the platform launcher (`CodePark.command`
+on macOS/Linux or `CodePark.cmd` on Windows) for secure local
 workspace boot.
 
 Then run:
@@ -361,7 +362,7 @@ Inside interactive mode:
 - Workspace policy can deny write paths, optionally restrict writes to allowed paths, and block extra shell command names or command fragments per app. File writes, replacements, patch application, shell commands, hooks, and managed workers enforce this policy in addition to the built-in safety policy.
 - `codepark container-runtime`, `/container-runtime`, and `container_runtime` detect local container support dynamically, preferring Podman when available and falling back to Docker. Detection also scans Compose files for risky settings such as privileged containers, host networking, host PID/IPC sharing, Docker socket mounts, host root mounts, home-directory mounts, device mappings, capability additions, and security-option overrides.
 - `codepark compose-start`, `/compose-start`, and `compose_start` run Podman/Docker Compose as a managed worker, preferring Podman. Compose startup refuses critical container risks by default. `codepark compose-stop`, `/compose-stop`, and `compose_stop` run the matching Compose `down`.
-- `codepark launcher-install`, `/launcher-install`, and `install_launcher` write a local `CodePark.command` launcher so the workspace can be booted with CodePark from Finder or a shell. The launcher runs secure `workspace-boot`, falls back to this repo's `bin/codepark.js` when a global `codepark` command is not on `PATH`, prints boot status and next commands, and waits for Return before closing.
+- `codepark launcher-install`, `/launcher-install`, and `install_launcher` write a platform-native local launcher (`CodePark.command` on macOS/Linux or `CodePark.cmd` on Windows) so the workspace can be booted with CodePark from Finder, Explorer, or a shell. The launcher runs secure `workspace-boot`, falls back to this repo's `bin/codepark.js` when a global `codepark` command is unavailable, prints boot status and next commands, and waits for input before closing.
 - `/checkpoint` and `create_checkpoint` save tracked git diffs plus copied untracked files under `.codepark/checkpoints` without changing the working tree.
 - `/restore-checkpoint` and `restore_checkpoint` validate saved patches with `git apply --check` before restoring checkpoint contents.
 - `codepark task-add`, `/task-add`, `codepark tasks`, `/tasks`, `codepark task-show`, `/task-show`, `codepark task-update`, `/task-update`, `codepark task-done`, `/task-done`, `codepark task-open`, `/task-open`, and their model tools maintain a local ignored work ledger in `.codepark/tasks.json`. Tasks support `low`/`normal`/`high` priorities, labels, notes, exact persisted dependencies, structured mutation output through `task-add --json`, `/task-add --json`, or `add_task` with `json: true`, `task-update --json`, `/task-update --json`, or `update_task` with `json: true`, `task-done --json`, `/task-done --json`, or `complete_task` with `json: true`, `task-open --json`, `/task-open --json`, or `reopen_task` with `json: true`, structured list output through `tasks --json`, `/tasks --json`, or `list_tasks` with `json: true`, full detail inspection, structured detail output through `task-show --json`, `/task-show --json`, or `show_task` with `json: true`, and a derived `blocked` list filter for open tasks with unfinished dependencies.

@@ -15,14 +15,15 @@ import {
   validateContainerRisks
 } from '../src/containerRuntime.js';
 import { readWorker } from '../src/workers.js';
+import { writeNodeExecutable } from './helpers/platform.js';
 
 test('detectContainerRuntime prefers podman and reports compose files', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-runtime-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services: {}\n');
-  await writeExecutable(path.join(bin, 'docker'));
-  await writeExecutable(path.join(bin, 'podman'));
-  await writeExecutable(path.join(bin, 'podman-compose'));
+  await writeNodeExecutable(bin, 'docker');
+  await writeNodeExecutable(bin, 'podman');
+  await writeNodeExecutable(bin, 'podman-compose');
 
   const result = await detectContainerRuntime(root, { path: bin });
   assert.equal(result.runtime, 'podman');
@@ -38,7 +39,7 @@ test('detectContainerRuntime falls back to docker', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-runtime-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-bin-'));
   await fs.writeFile(path.join(root, 'Dockerfile'), 'FROM scratch\n');
-  await writeExecutable(path.join(bin, 'docker'));
+  await writeNodeExecutable(bin, 'docker');
 
   const result = await detectContainerRuntime(root, { path: bin });
   assert.equal(result.runtime, 'docker');
@@ -50,7 +51,7 @@ test('buildComposeCommand uses detected podman compose command', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-runtime-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services: {}\n');
-  await writeExecutable(path.join(bin, 'podman'), 'exit 0\n');
+  await writeNodeExecutable(bin, 'podman');
 
   const runtime = await detectContainerRuntime(root, { path: bin });
   assert.equal(buildComposeCommand(runtime, ['up', '-d']), 'podman compose up -d');
@@ -87,7 +88,7 @@ test('detectContainerRuntime includes compose risk scan results', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-risk-detect-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-container-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services:\n  app:\n    network_mode: host\n');
-  await writeExecutable(path.join(bin, 'podman'), 'exit 0\n');
+  await writeNodeExecutable(bin, 'podman');
 
   const runtime = await detectContainerRuntime(root, { path: bin });
   assert.equal(runtime.risks.length, 1);
@@ -99,7 +100,7 @@ test('startCompose refuses critical container risks', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-risk-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-risk-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services:\n  app:\n    privileged: true\n');
-  await writeExecutable(path.join(bin, 'podman'), 'echo "should not run"\n');
+  await writeNodeExecutable(bin, 'podman', "console.log('should not run');");
   const previousPath = process.env.PATH;
   process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ''}`;
 
@@ -117,7 +118,7 @@ test('compose lifecycle prefers podman and records worker output', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-runtime-'));
   const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-compose-bin-'));
   await fs.writeFile(path.join(root, 'compose.yaml'), 'services: {}\n');
-  await writeExecutable(path.join(bin, 'podman'), 'echo "fake podman $*"\n');
+  await writeNodeExecutable(bin, 'podman', "console.log(`fake podman ${process.argv.slice(2).join(' ')}`);");
   const previousPath = process.env.PATH;
   process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ''}`;
 
@@ -140,11 +141,6 @@ test('compose lifecycle prefers podman and records worker output', async () => {
     process.env.PATH = previousPath;
   }
 });
-
-async function writeExecutable(file, body = 'exit 0\n') {
-  await fs.writeFile(file, `#!/bin/sh\n${body}`);
-  await fs.chmod(file, 0o755);
-}
 
 async function waitForWorkerExit(root, id) {
   const startedAt = Date.now();

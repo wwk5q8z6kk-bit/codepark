@@ -40,6 +40,18 @@ test('background workers run commands scoped to tasks and persist logs', async (
   assert.match(formatWorkerList(await listWorkers(root)), /worker-test/);
 });
 
+test('background workers retain completion status for fast commands', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-workers-fast-'));
+  const task = await addTask(root, { title: 'Run fast background work', now: '2026-04-18T12:00:00.000Z' });
+  const command = `${JSON.stringify(process.execPath)} -e ""`;
+
+  await startWorker(root, { taskId: task.id, command, id: 'worker-fast' });
+  const finished = await waitForWorker(root, 'worker-fast', worker => worker.status !== 'running');
+
+  assert.equal(finished.status, 'done');
+  assert.equal(finished.exitCode, 0);
+});
+
 test('background workers can be stopped', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-workers-'));
   const task = await addTask(root, { title: 'Stop background work', now: '2026-04-18T12:00:00.000Z' });

@@ -62,6 +62,7 @@ async function createGitWorkspace() {
   execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
   execFileSync('git', ['config', 'user.email', 'codepark@example.test'], { cwd: root });
   execFileSync('git', ['config', 'user.name', 'CodePark Test'], { cwd: root });
+  execFileSync('git', ['config', 'core.autocrlf', 'false'], { cwd: root });
   await fs.writeFile(path.join(root, 'tracked.txt'), 'initial\n');
   execFileSync('git', ['add', 'tracked.txt'], { cwd: root });
   execFileSync('git', ['commit', '-m', 'initial'], { cwd: root, stdio: 'ignore' });

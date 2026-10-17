@@ -4,14 +4,14 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const checkpointRoot = path.join('.codepark', 'checkpoints');
+const checkpointRoot = '.codepark/checkpoints';
 
 export async function createCheckpoint(cwd, options = {}) {
   await assertGitRepo(cwd);
   const name = String(options.name ?? '').trim() || 'checkpoint';
   const createdAt = new Date().toISOString();
   const id = `${createdAt.replace(/[:.]/g, '-')}-${slugify(name)}`;
-  const relativeDir = path.join(checkpointRoot, id);
+  const relativeDir = `${checkpointRoot}/${id}`;
   const absoluteDir = path.join(cwd, relativeDir);
   const untrackedFiles = await listUntrackedFiles(cwd);
   const patch = await git(cwd, ['diff', '--binary', 'HEAD']);

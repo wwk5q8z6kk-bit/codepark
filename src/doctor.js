@@ -1,6 +1,8 @@
 import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { getConfigDir, getConfigPath, modelAuthStatus } from './config.js';
 import { listHooks } from './hooks.js';
 import { loadWorkspaceMcpConfig } from './mcp/config.js';
@@ -9,6 +11,9 @@ import { inspectLauncher } from './launcher.js';
 import { listLocalSkills } from './skills.js';
 import { listTasks } from './tasks.js';
 import { listWorkers } from './workers.js';
+import { executableNames, isWindows } from './platform.js';
+
+const execFileAsync = promisify(execFile);
 
 export function checkNodeVersion(version) {
   const major = Number(String(version).split('.')[0]);
@@ -55,6 +60,7 @@ export function formatDoctorReportJson(report) {
 async function checkPermission(file, expectedMode, label) {
   try {
     const stat = await fs.stat(file);
+    if (isWindows()) return checkWindowsAcl(file, label);
     const actual = stat.mode & 0o777;
     const expectedText = formatMode(expectedMode);
     const actualText = formatMode(actual);
@@ -68,6 +74,36 @@ async function checkPermission(file, expectedMode, label) {
     if (error?.code === 'ENOENT') return { ok: true, message: `${label} not found` };
     return { ok: false, message: `${label} unreadable: ${error.message}` };
   }
+}
+
+async function checkWindowsAcl(file, label) {
+  try {
+    const { stdout } = await execFileAsync('icacls', [file], {
+      windowsHide: true,
+      maxBuffer: 1024 * 1024
+    });
+    const broadWrite = hasBroadWindowsAclWrite(stdout);
+    return {
+      ok: !broadWrite,
+      message: broadWrite
+        ? `${label} ACL grants broad write access`
+        : `${label} ACL does not grant broad write access`
+    };
+  } catch (error) {
+    return { ok: false, message: `${label} ACL could not be verified: ${error.message}` };
+  }
+}
+
+export function hasBroadWindowsAclWrite(acl) {
+  return String(acl).split(/\r?\n/).some(line => {
+    if (!/(?:Everyone|Authenticated Users|\\Users)(?:\s|:)/i.test(line)) return false;
+    const rights = [...line.matchAll(/\(([^)]+)\)/g)]
+      .flatMap(match => match[1].split(','))
+      .map(right => right.trim().toUpperCase());
+    return rights.some(right => [
+      'F', 'M', 'W', 'GW', 'GA', 'WD', 'AD', 'WEA', 'WA', 'WDAC', 'WO', 'DC', 'D'
+    ].includes(right));
+  });
 }
 
 function formatMode(mode) {
@@ -97,8 +133,10 @@ async function checkLauncher(cwd) {
 async function findExecutable(name, env) {
   const pathValue = env?.PATH || '';
   for (const directory of pathValue.split(path.delimiter).filter(Boolean)) {
-    const candidate = path.join(directory, name);
-    if (await isExecutable(candidate)) return candidate;
+    for (const candidateName of executableNames(name, env)) {
+      const candidate = path.join(directory, candidateName);
+      if (await isExecutable(candidate)) return candidate;
+    }
   }
   return '';
 }

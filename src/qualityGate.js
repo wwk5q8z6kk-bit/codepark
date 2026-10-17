@@ -1,8 +1,10 @@
-import { execFile } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createSubprocessEnv } from './env.js';
 import { detectPackageManager, readPackageJson } from './project.js';
+import { commandShell, isWindows } from './platform.js';
 
+const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const qualityScriptOrder = ['check', 'lint', 'typecheck', 'test'];
 
@@ -48,6 +50,15 @@ export async function runQualityGate(cwd, options = {}) {
 }
 
 function runPackageScript(cwd, packageManager, script, timeoutMs = 300000) {
+  if (isWindows()) {
+    return execAsync(`${packageManager} run ${script}`, {
+      cwd,
+      timeout: timeoutMs,
+      env: createSubprocessEnv(process.env),
+      maxBuffer: 1024 * 1024,
+      shell: commandShell()
+    });
+  }
   return execFileAsync(packageManager, ['run', script], {
     cwd,
     timeout: timeoutMs,

@@ -25,8 +25,10 @@ test('saveConfig writes private config file permissions', async () => {
   delete process.env.OPENAI_API_KEY;
   try {
     await saveConfig({ provider: 'openai', apiKey: 'sk-test-secret' });
-    const stat = await fs.stat(getConfigPath());
-    assert.equal(stat.mode & 0o777, 0o600);
+    if (process.platform !== 'win32') {
+      const stat = await fs.stat(getConfigPath());
+      assert.equal(stat.mode & 0o777, 0o600);
+    }
     assert.equal(loadConfig().apiKey, 'sk-test-secret');
   } finally {
     if (previousDir === undefined) delete process.env.CODEPARK_CONFIG_DIR;

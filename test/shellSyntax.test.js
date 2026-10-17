@@ -14,8 +14,20 @@ test('parseShellWords keeps quoted arguments and shell operators distinct', () =
 });
 
 test('quoteShellWords preserves embedded single quotes for shell execution', () => {
-  assert.equal(
-    quoteShellWords(['node', '-e', "console.log('done')"]),
-    "node -e 'console.log('\"'\"'done'\"'\"')'"
-  );
+  assert.equal(quoteShellWords(['node', '-e', "console.log('done')"]), process.platform === 'win32'
+    ? `node -e "console.log('done')"`
+    : `node -e 'console.log('"'"'done'"'"')'`);
+});
+
+test('quoteShellWords preserves literal percent signs for Windows shell execution', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  try {
+    assert.equal(
+      quoteShellWords(['C:\\workspace-%PROJECT%\\.codepark\\agent.json']),
+      '"C:\\workspace-%%PROJECT%%\\.codepark\\agent.json"'
+    );
+  } finally {
+    Object.defineProperty(process, 'platform', originalPlatform);
+  }
 });

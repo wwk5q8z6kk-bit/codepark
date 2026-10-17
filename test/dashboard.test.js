@@ -95,7 +95,7 @@ test('browser dashboard writes static HTML with readiness and policy state', asy
     secureMode: true
   });
 
-  assert.equal(result.path, path.join('.codepark', 'dashboard.html'));
+  assert.equal(result.path, '.codepark/dashboard.html');
   assert.match(formatBrowserDashboard(result), /Wrote \.codepark\/dashboard\.html/);
   assert.equal(result.payload.dashboard.totals.tasks, 1);
   assert.deepEqual(result.payload.policy.policy.write.allow, ['.codepark/**', 'src/**']);

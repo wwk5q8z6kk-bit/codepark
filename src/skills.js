@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const skillsDir = path.join('.codepark', 'skills');
+const skillsDir = '.codepark/skills';
 const maxSkillBytes = 60000;
 const maxPackageBytes = 250000;
 const skillPackageSchema = 'codepark.skill-package.v1';

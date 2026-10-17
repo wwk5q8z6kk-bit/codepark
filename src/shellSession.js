@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createSubprocessEnv } from './env.js';
+import { defaultShell, isWindows } from './platform.js';
 
 const sessions = new Map();
 let nextId = 1;
@@ -8,8 +9,8 @@ let nextMarker = 1;
 export function startShellSession(cwd, options = {}) {
   const id = normalizeSessionId(options.id) || `shell-${nextId++}`;
   if (sessions.has(id)) throw new Error(`shell session already exists: ${id}`);
-  const shell = options.shell || process.env.SHELL || '/bin/sh';
-  const child = spawn(shell, [], {
+  const shell = options.shell || defaultShell();
+  const child = spawn(shell, isWindows() ? ['/D', '/Q', '/K'] : [], {
     cwd,
     env: createSubprocessEnv(process.env),
     detached: process.platform !== 'win32',
@@ -49,7 +50,7 @@ export async function sendShellSessionCommand(id, command, options = {}) {
   if (session.closed || session.child.killed) throw new Error(`shell session is closed: ${id}`);
   const marker = `__CODEPARK_DONE_${Date.now()}_${nextMarker++}__`;
   const startOffset = session.output.length;
-  session.child.stdin.write(`${command}\nprintf '\\n${marker}:%s\\n' "$?"\n`);
+  session.child.stdin.write(formatShellSessionInput(command, marker));
   const slice = await waitForMarker(session, marker, options.timeoutMs ?? 30000, startOffset);
   const match = slice.match(new RegExp(`\\r?\\n?${marker}:(\\d+)\\r?\\n?`));
   if (!match) throw new Error(`shell session command did not report completion: ${id}`);
@@ -178,7 +179,20 @@ function publicSession(session) {
   };
 }
 
+function formatShellSessionInput(command, marker) {
+  if (isWindows()) return `${command}\r\n@echo ${marker}:%ERRORLEVEL%\r\n`;
+  return `${command}\nprintf '\\n${marker}:%s\\n' "$?"\n`;
+}
+
 function terminateShellProcessTree(session) {
+  if (isWindows() && session.child.pid) {
+    const taskkill = spawn('taskkill', ['/PID', String(session.child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    taskkill.on('error', () => session.child.kill('SIGTERM'));
+    return;
+  }
   if (process.platform !== 'win32' && session.child.pid) {
     try {
       process.kill(-session.child.pid, 'SIGTERM');

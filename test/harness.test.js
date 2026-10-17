@@ -35,7 +35,7 @@ test('initHarness writes inferred hooks without overwriting existing config', as
   }));
 
   const result = await initHarness(root);
-  assert.equal(result.path, path.join('.codepark', 'hooks.json'));
+  assert.equal(result.path, '.codepark/hooks.json');
   assert.equal(result.packageManager, 'npm');
   assert.equal(result.overwritten, false);
   assert.match(formatHarnessInit(result), /Next: run \/hooks/);

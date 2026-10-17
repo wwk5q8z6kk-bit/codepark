@@ -3,8 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initHarness, formatHarnessInit } from './harness.js';
-import { installLauncher, formatLauncherInstall } from './launcher.js';
+import { defaultLauncherName, installLauncher, formatLauncherInstall } from './launcher.js';
 import { initWorkspaceProfile, formatWorkspaceProfileInit } from './workspaceProfile.js';
+import { isWindows } from './platform.js';
 
 const codeparkBinPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'codepark.js');
 
@@ -37,19 +38,19 @@ export function formatLocalInstall(result) {
       ? 'PATH: command directory is already on PATH'
       : `PATH: add ${result.binDir} to PATH if your shell cannot find codepark`,
     process.platform === 'darwin'
-      ? 'Next: double-click CodePark.command or run codepark workspace-boot --secure from this workspace.'
+      ? `Next: double-click ${defaultLauncherName()} or run codepark workspace-boot --secure from this workspace.`
       : 'Next: run codepark workspace-boot --secure from this workspace.'
   ].join('\n');
 }
 
 async function installCommand(binDir, options = {}) {
-  const target = path.join(binDir, 'codepark');
+  const target = path.join(binDir, isWindows() ? 'codepark.cmd' : 'codepark');
   await fs.mkdir(binDir, { recursive: true });
   await fs.chmod(codeparkBinPath, 0o755).catch(() => {});
 
   const existing = await readExistingTarget(target);
   if (existing.exists) {
-    if (existing.isSymlink && resolveLinkTarget(target, existing.linkTarget) === codeparkBinPath) {
+    if (await existingPointsToCodePark(target, existing)) {
       return { ok: true, action: 'unchanged', path: target, message: `codepark already points to ${codeparkBinPath}` };
     }
     if (!options.force) {
@@ -58,8 +59,19 @@ async function installCommand(binDir, options = {}) {
     await fs.unlink(target);
   }
 
-  await fs.symlink(codeparkBinPath, target);
+  if (isWindows()) {
+    await fs.writeFile(target, `@echo off\r\n${windowsQuote(process.execPath)} ${windowsQuote(codeparkBinPath)} %*\r\n`);
+  } else {
+    await fs.symlink(codeparkBinPath, target);
+  }
   return { ok: true, action: existing.exists ? 'rewrote' : 'wrote', path: target, message: `${target} -> ${codeparkBinPath}` };
+}
+
+async function existingPointsToCodePark(target, existing) {
+  if (existing.isSymlink) return resolveLinkTarget(target, existing.linkTarget) === codeparkBinPath;
+  if (!isWindows()) return false;
+  const content = await fs.readFile(target, 'utf8').catch(() => '');
+  return content.includes(windowsQuote(codeparkBinPath));
 }
 
 async function readExistingTarget(target) {
@@ -104,6 +116,10 @@ function expandHome(value) {
   if (value === '~') return os.homedir();
   if (value.startsWith(`~${path.sep}`)) return path.join(os.homedir(), value.slice(2));
   return value;
+}
+
+function windowsQuote(value) {
+  return `"${String(value).replace(/%/g, '%%').replace(/"/g, '""')}"`;
 }
 
 function resolveLinkTarget(target, linkTarget) {

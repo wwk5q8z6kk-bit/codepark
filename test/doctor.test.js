@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkNodeVersion, runDoctor } from '../src/doctor.js';
-import { installLauncher } from '../src/launcher.js';
+import { checkNodeVersion, hasBroadWindowsAclWrite, runDoctor } from '../src/doctor.js';
+import { defaultLauncherName, installLauncher } from '../src/launcher.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mockMcpServer = path.join(repoRoot, 'fixtures', 'mock-mcp-server.js');
@@ -18,6 +18,15 @@ test('checkNodeVersion returns ok on current node', () => {
 test('checkNodeVersion fails old node', () => {
   const result = checkNodeVersion('16.0.0');
   assert.equal(result.ok, false);
+});
+
+test('hasBroadWindowsAclWrite rejects generic and granular writes', () => {
+  assert.equal(hasBroadWindowsAclWrite('Everyone:(I)(WD,AD)'), true);
+  assert.equal(hasBroadWindowsAclWrite('NT AUTHORITY\\Authenticated Users:(M)'), true);
+  assert.equal(hasBroadWindowsAclWrite('BUILTIN\\Users:(GW)'), true);
+  assert.equal(hasBroadWindowsAclWrite('Everyone:(GA)'), true);
+  assert.equal(hasBroadWindowsAclWrite('BUILTIN\\Users:(RX)'), false);
+  assert.equal(hasBroadWindowsAclWrite('EXAMPLE\\owner:(F)'), false);
 });
 
 test('runDoctor reports local workflow files', async () => {
@@ -79,7 +88,14 @@ test('runDoctor reports local command and launcher readiness', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-doctor-launcher-'));
   const binDir = path.join(cwd, 'bin');
   await fs.mkdir(binDir, { recursive: true });
-  await fs.symlink(path.join(repoRoot, 'bin', 'codepark.js'), path.join(binDir, 'codepark'));
+  if (process.platform === 'win32') {
+    await fs.writeFile(
+      path.join(binDir, 'codepark.cmd'),
+      `@echo off\r\n"${process.execPath}" "${path.join(repoRoot, 'bin', 'codepark.js')}" %*\r\n`
+    );
+  } else {
+    await fs.symlink(path.join(repoRoot, 'bin', 'codepark.js'), path.join(binDir, 'codepark'));
+  }
   await installLauncher(cwd);
 
   const report = await runDoctor(
@@ -95,7 +111,7 @@ test('runDoctor reports local command and launcher readiness', async () => {
 
 test('runDoctor reports launchers that do not boot the workspace harness', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-doctor-stale-launcher-'));
-  const launcher = path.join(cwd, 'CodePark.command');
+  const launcher = path.join(cwd, defaultLauncherName());
   await fs.writeFile(launcher, [
     '#!/bin/sh',
     'set -eu',
@@ -124,7 +140,7 @@ test('runDoctor reports missing launchers', async () => {
   assert.equal(report.command.ok, false);
   assert.match(report.command.message, /not found on PATH/);
   assert.equal(report.launcher.ok, false);
-  assert.match(report.launcher.message, /CodePark\.command not found/);
+  assert.match(report.launcher.message, new RegExp(`${defaultLauncherName().replace('.', '\\.')} not found`));
 });
 
 test('runDoctor reports secure config storage permissions', async () => {
@@ -140,12 +156,12 @@ test('runDoctor reports secure config storage permissions', async () => {
   );
 
   assert.equal(report.configDir.ok, true);
-  assert.match(report.configDir.message, /0700/);
+  assert.match(report.configDir.message, process.platform === 'win32' ? /ACL does not grant broad write access/ : /0700/);
   assert.equal(report.configFile.ok, true);
-  assert.match(report.configFile.message, /0600/);
+  assert.match(report.configFile.message, process.platform === 'win32' ? /ACL does not grant broad write access/ : /0600/);
 });
 
-test('runDoctor reports insecure config storage permissions', async () => {
+test('runDoctor reports insecure config storage permissions', { skip: process.platform === 'win32' }, async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-doctor-'));
   const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codepark-config-dir-'));
   const configPath = path.join(configDir, 'config.json');

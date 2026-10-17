@@ -14,15 +14,15 @@
   },
   "launcher": {
     "ok": false,
-    "message": "CodePark.command not found; run codepark launcher-install or codepark install-local"
+    "message": "<launcher-missing>"
   },
   "configDir": {
     "ok": true,
-    "message": "config directory permissions 0700"
+    "message": "<config-dir-permissions>"
   },
   "configFile": {
     "ok": true,
-    "message": "config file permissions 0600"
+    "message": "<config-file-permissions>"
   },
   "provider": {
     "ok": true,

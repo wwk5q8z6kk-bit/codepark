@@ -1,4 +1,5 @@
 import { parseShellWords } from '../shellSyntax.js';
+import { isWindows } from '../platform.js';
 
 const dangerousCommands = new Set([
   'sh',
@@ -51,7 +52,7 @@ function evaluateLine(line) {
 function evaluateCommandTokens(tokens) {
   const command = tokens[0];
   if (!command) return 'allowedWithPermission';
-  if (dangerousCommands.has(pathBasename(command))) return 'disabled';
+  if (dangerousCommands.has(pathBasename(command)) || isWindowsCommandInterpreter(command)) return 'disabled';
   return 'allowedWithPermission';
 }
 
@@ -60,8 +61,16 @@ function isOperator(token) {
 }
 
 function pathBasename(command) {
-  const parts = String(command).split('/');
-  return parts[parts.length - 1];
+  const parts = String(command).split(/[\\/]/);
+  return parts[parts.length - 1]
+    .toLowerCase()
+    .replace(/\.(?:bat|cmd|com|exe)$/i, '');
+}
+
+function isWindowsCommandInterpreter(command) {
+  if (!isWindows()) return false;
+  const name = pathBasename(command);
+  return name === 'cmd' || name === 'command' || /^%comspec(?::[^%]*)?%$/i.test(name);
 }
 
 function mostRestrictive(a, b) {

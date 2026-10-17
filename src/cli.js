@@ -1905,7 +1905,7 @@ async function writeInitialExamples(cwd) {
       ].join('\n')
     },
     {
-      path: path.join('.codepark', 'hooks.example.json'),
+      path: '.codepark/hooks.example.json',
       content: `${JSON.stringify({
         hooks: {
           verify: ['npm run verify']
@@ -1913,7 +1913,7 @@ async function writeInitialExamples(cwd) {
       }, null, 2)}\n`
     },
     {
-      path: path.join('.codepark', 'skills', 'example-review.md'),
+      path: '.codepark/skills/example-review.md',
       content: [
         '# Example Review',
         '',

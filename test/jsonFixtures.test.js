@@ -53,7 +53,10 @@ function normalizeDoctor(json, workspace) {
     ...json,
     node: { ...json.node, message: '<node>' },
     workspace: { ...json.workspace, message: '<cwd>' },
-    command: { ...json.command, message: '<command>' }
+    command: { ...json.command, message: '<command>' },
+    launcher: { ...json.launcher, message: '<launcher-missing>' },
+    configDir: { ...json.configDir, message: '<config-dir-permissions>' },
+    configFile: { ...json.configFile, message: '<config-file-permissions>' }
   };
 }
 
